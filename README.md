@@ -18,4 +18,4 @@ Then republish `index.html` to the same artifact so the link stays the same.
 
 ## Minigames
 
-One every 15 points, taking turns: Lab Inspection, then Fizz Containment. Grant Pitch Karaoke and Shrimp Stacking are still to build. Tap Lab Crab on the title screen to open the minigame list for testing.
+One every 15 points, taking turns: Lab Inspection, Fizz Containment, then Shrimp Stacking. Grant Pitch Karaoke is still to build. Tap Lab Crab on the title screen to open the minigame list for testing.
