@@ -1,0 +1,1551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prawn Review Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one-screen lab bench. Memos pinned up top, the proposal card in the middle, the two stamps at your fingertips. */
+:root {
+  --bg: #12222a;          /* tiled lab wall, after hours */
+  --bg-tile: #172b34;
+  --paper: #f3ecd8;       /* grant proposal paper */
+  --ink: #2a1d22;
+  --memo: #ffd95a;        /* committee sticky note */
+  --fund: #3fbf7f;
+  --reject: #e8503a;
+  --shrimp: #ff9664;
+  --dim: #8fb0b8;
+  --fg: #eef6f4;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  background-image:
+    linear-gradient(var(--bg-tile) 2px, transparent 2px),
+    linear-gradient(90deg, var(--bg-tile) 2px, transparent 2px);
+  background-size: 28px 28px;
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: 15px;
+  overflow: hidden;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
+.app {
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+.pix { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* HUD */
+.hud { display: flex; justify-content: space-between; align-items: center; font-family: var(--display); }
+.hud .score { font-size: 22px; font-variant-numeric: tabular-nums; }
+.hud .score small { font-size: 12px; color: var(--dim); letter-spacing: .08em; display: block; text-transform: uppercase; }
+.lives { display: flex; gap: 6px; font-size: 22px; }
+.life { width: 22px; height: 26px; position: relative; }
+.life::before { content: ""; position: absolute; inset: 8px 2px 0; background: var(--fund); border-radius: 0 0 9px 9px; border: 2px solid var(--fg); border-top: 0; }
+.life::after { content: ""; position: absolute; left: 7px; top: 0; width: 8px; height: 10px; border: 2px solid var(--fg); border-bottom: 0; }
+.life.gone::before { background: transparent; border-style: dashed; opacity: .4; }
+.life.gone::after { opacity: .4; }
+
+/* Memos */
+.memos { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.memos h2 { margin: 0; font-family: var(--display); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); font-weight: 500; }
+.memo {
+  background: var(--memo); color: var(--ink);
+  padding: 6px 10px; font-size: 13.5px; line-height: 1.3; font-weight: 700;
+  box-shadow: 2px 3px 0 rgba(0,0,0,.35);
+}
+.memo:nth-child(odd) { transform: rotate(-.6deg); }
+.memo:nth-child(even) { transform: rotate(.5deg); }
+.memo.fresh { animation: slap .4s ease-out; }
+@keyframes slap { 0% { transform: scale(1.3) rotate(-4deg); opacity: 0 } 100% { transform: none; opacity: 1 } }
+
+/* Card */
+.stage { flex: 1; position: relative; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.card {
+  width: 100%; max-height: 100%;
+  background: var(--paper); color: var(--ink);
+  padding: 14px 16px 16px;
+  box-shadow: 0 6px 0 rgba(0,0,0,.35);
+  position: relative;
+  touch-action: none;
+  display: flex; flex-direction: column; gap: 8px;
+  box-sizing: border-box;
+  will-change: transform;
+}
+.card .formno { display: flex; justify-content: space-between; font-family: var(--display); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #7a6a5c; }
+.card .who { display: flex; gap: 12px; align-items: center; }
+.card .who img { width: 88px; height: 88px; flex: none; animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-4px) rotate(-2deg); } }
+.card .name { font-family: var(--display); font-size: 18px; font-weight: 700; line-height: 1.1; }
+.card .dept { font-size: 13px; color: #6d5c50; }
+.card .title { font-size: 19px; line-height: 1.25; font-weight: 700; margin: 0; text-wrap: balance; }
+.card .plea { font-size: 14px; font-style: italic; color: #5b4a42; margin: 0; }
+.card .facts { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag { font-family: var(--display); font-size: 13px; padding: 3px 8px; border: 2px solid var(--ink); text-transform: uppercase; letter-spacing: .06em; }
+.tag.cost { font-variant-numeric: tabular-nums; }
+.timer { height: 6px; background: #d9cfb6; position: relative; overflow: hidden; }
+.timer i { position: absolute; inset: 0; background: var(--reject); transform-origin: left; }
+.stamp {
+  position: absolute; top: 40%; left: 50%;
+  font-family: var(--display); font-weight: 700; font-size: 38px; letter-spacing: .06em;
+  padding: 4px 14px; border: 5px solid currentColor;
+  transform: translate(-50%, -50%) rotate(-14deg);
+  opacity: 0; pointer-events: none;
+}
+.stamp.fund { color: var(--fund); }
+.stamp.reject { color: var(--reject); transform: translate(-50%, -50%) rotate(12deg); }
+
+/* Verdict toast */
+.verdict {
+  position: absolute; inset: auto 0 0; z-index: 3;
+  background: var(--ink); color: var(--fg);
+  padding: 12px 14px; font-size: 15px; line-height: 1.35;
+  border-left: 6px solid var(--fund);
+  animation: rise .25s ease-out;
+}
+.verdict.bad { border-left-color: var(--reject); }
+.verdict b { font-family: var(--display); display: block; font-size: 16px; letter-spacing: .04em; margin-bottom: 2px; }
+@keyframes rise { from { transform: translateY(12px); opacity: 0 } }
+
+/* Buttons */
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.actions button {
+  font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: .06em;
+  padding: 14px 8px; border: 0; color: #fff;
+  box-shadow: 0 5px 0 rgba(0,0,0,.4);
+}
+.actions button:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.actions .no { background: var(--reject); }
+.actions .yes { background: var(--fund); }
+.hint { text-align: center; font-size: 12px; color: var(--dim); margin: -4px 0 0; }
+
+/* Screens */
+.screen {
+  position: fixed; inset: 0; z-index: 10;
+  background: rgba(10, 22, 27, .94);
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+}
+.panel { margin-block: auto; max-width: 420px; width: 100%; display: flex; flex-direction: column; gap: 14px; text-align: center; align-items: center; }
+.panel h1 { font-family: var(--display); font-size: 40px; line-height: 1; margin: 0; color: var(--shrimp); text-wrap: balance; text-shadow: 3px 3px 0 #6e1a22; }
+.panel p { margin: 0; line-height: 1.45; max-width: 36ch; }
+.trio { display: flex; gap: 4px; justify-content: center; }
+.trio img { width: 84px; height: 84px; animation: bob 1.6s ease-in-out infinite; }
+.trio img:nth-child(2) { animation-delay: -.5s; }
+.trio img:nth-child(3) { animation-delay: -1s; }
+.big {
+  font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .06em;
+  background: var(--shrimp); color: var(--ink); border: 0; padding: 14px 28px;
+  box-shadow: 0 5px 0 #6e1a22;
+}
+.big:active { transform: translateY(3px); box-shadow: 0 2px 0 #6e1a22; }
+.memo-screen .memo { font-size: 17px; padding: 16px 18px; transform: rotate(-1.5deg); max-width: 32ch; text-align: left; }
+.memo-screen .from { font-family: var(--display); font-size: 12px; letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+.final { font-family: var(--display); font-size: 56px; color: var(--fg); line-height: 1; font-variant-numeric: tabular-nums; }
+.rank { font-family: var(--display); font-size: 20px; color: var(--memo); }
+.small { font-size: 13px; color: var(--dim); }
+/* Lab Inspection minigame */
+.inspect { align-items: stretch; }
+.inspect-wrap { width: 100%; height: 100%; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.inspector { display: flex; align-items: center; gap: 12px; }
+.inspector img { width: 96px; height: 72px; flex: none; transition: transform .15s; }
+.inspector.away img { transform: scaleX(1); }
+.inspector.turning img { animation: wobble .18s infinite; }
+.inspector.looking img { transform: scaleX(-1) scale(1.12); }
+@keyframes wobble { 50% { transform: rotate(8deg); } }
+.inspector .says { font-size: 14px; line-height: 1.35; min-width: 0; }
+.inspector .says b { font-family: var(--display); display: block; font-size: 17px; letter-spacing: .04em; }
+.inspector.away .says b { color: var(--fund); }
+.inspector.turning .says b { color: var(--memo); }
+.inspector.looking .says b { color: var(--reject); }
+.room {
+  flex: 1; min-height: 300px; position: relative; overflow: hidden;
+  background: var(--bg-tile);
+  background-image: linear-gradient(var(--bg) 2px, transparent 2px), linear-gradient(90deg, var(--bg) 2px, transparent 2px);
+  background-size: 40px 40px;
+  border: 3px solid var(--dim);
+}
+.room::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 85% -10%, rgba(255, 217, 90, .55), rgba(255, 217, 90, .12) 60%, transparent 75%);
+  opacity: 0; transition: opacity .2s;
+}
+.room.lit::after { opacity: 1; }
+.evidence {
+  position: absolute; width: 22%; aspect-ratio: 1; max-width: 84px;
+  padding: 0; border: 0; background: none;
+  transform: translate(-50%, -50%); animation: popin .2s ease-out;
+}
+.evidence img { width: 100%; height: 100%; display: block; }
+.evidence.spotted { outline: 3px solid var(--reject); outline-offset: 2px; animation: none; }
+.evidence.gone { animation: poof .25s ease-in forwards; pointer-events: none; }
+@keyframes popin { from { transform: translate(-50%, -50%) scale(0); } }
+@keyframes poof { to { transform: translate(-50%, -50%) scale(0) rotate(90deg); opacity: 0; } }
+.decoy.intern img { transform: rotate(-90deg); }
+.decoy.intern::after {
+  content: "z z"; position: absolute; top: -10px; right: -4px;
+  font-family: var(--display); font-size: 14px; color: var(--dim);
+  animation: snore 1.4s ease-in-out infinite;
+}
+@keyframes snore { 50% { transform: translateY(-5px); opacity: .5; } }
+.foam {
+  position: absolute; inset: 0; z-index: 2;
+  background:
+    radial-gradient(circle at 20% 30%, #fff 0 18%, transparent 19%),
+    radial-gradient(circle at 60% 20%, #f4f8f8 0 22%, transparent 23%),
+    radial-gradient(circle at 80% 60%, #fff 0 20%, transparent 21%),
+    radial-gradient(circle at 35% 70%, #eef4f4 0 25%, transparent 26%),
+    radial-gradient(circle at 70% 90%, #fff 0 18%, transparent 19%),
+    rgba(255, 255, 255, .75);
+  animation: foam 1.7s ease-in forwards;
+}
+@keyframes foam { 0% { opacity: 0; transform: scale(.6); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.legend { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+.legend span { width: 7.5em; text-align: right; color: var(--fund); flex: none; }
+.legend.leave span { color: var(--reject); }
+.legend div { display: flex; flex-wrap: wrap; gap: 4px; }
+.legend img { width: 32px; height: 32px; }
+.legend.leave img:last-child { transform: rotate(-90deg); }
+/* Fizz Containment minigame */
+.fizz-room { touch-action: none; }
+.fizz-room::before {
+  content: "CEILING (NEW)"; position: absolute; left: 0; right: 0; top: 0; z-index: 1;
+  border-bottom: 3px dashed var(--reject); padding: 2px 6px;
+  font-family: var(--display); font-size: 11px; letter-spacing: .1em; color: var(--reject);
+}
+.fizz-room .flask { position: absolute; left: 50%; bottom: 0; width: 84px; height: 84px; transform: translateX(-50%); }
+.bubble {
+  position: absolute; left: 0; top: 0; padding: 0; border: 0; background: none center / 100% 100% no-repeat;
+  image-rendering: pixelated; image-rendering: crisp-edges; will-change: transform;
+}
+.bubble.crab img { width: 64%; height: 64%; display: block; margin: auto; }
+.bubble.pop { animation: bubblepop .22s steps(2) forwards; pointer-events: none; }
+@keyframes bubblepop { to { opacity: 0; } }
+.bubble.crab-drop { background-image: none !important; pointer-events: none; animation: crabdrop .9s ease-in forwards; }
+@keyframes crabdrop { 30% { translate: 0 -10px; } 100% { translate: 0 120vh; rotate: 25deg; } }
+.fizz-room.boom { animation: boom .9s; }
+@keyframes boom { 0% { background-color: #fff; filter: brightness(3); } 30% { transform: translate(-10px, 6px); } 50% { transform: translate(10px, -6px); } 100% { filter: none; } }
+.escaped { display: flex; align-items: center; gap: 4px; }
+.escaped i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--reject); }
+.escaped i.on { background: var(--reject); }
+.legend img { image-rendering: pixelated; }
+.tests { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+/* Lab Crab scuttles along the bottom of the title and game-over screens; tap him for the minigame list. */
+.screen .panel { position: relative; z-index: 1; }
+.crab-walk {
+  position: absolute; bottom: 10px; left: 4%; z-index: 0; width: 42px; height: 42px; padding: 0; border: 0; background: none;
+}
+.crab-walk img { width: 100%; height: 100%; display: block; }
+.crab-walk.walking img { animation: crabstep .3s steps(2) infinite; }
+.crab-walk.hop img { animation: crabhop .35s ease-out; }
+@keyframes crabstep { 50% { translate: 0 -2px; } }
+@keyframes crabhop { 40% { translate: 0 -14px; } }
+.crab-list { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.crab-list .from { font-family: var(--display); font-size: 12px; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; }
+.testbtn {
+  background: none; border: 2px dashed var(--dim); color: var(--dim);
+  font-family: var(--display); font-size: 13px; letter-spacing: .06em; padding: 6px 12px;
+}
+/* Shrimp Stacking minigame */
+.stack-room { touch-action: none; cursor: pointer; }
+.stack-room .award {
+  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
+  border-top: 3px dashed var(--memo); padding: 2px 6px;
+  font-family: var(--display); font-size: 11px; letter-spacing: .1em; color: var(--memo);
+}
+.stack-room .podium {
+  position: absolute; bottom: 0; left: 27%; right: 27%; height: 34px; display: grid; place-items: center;
+  background: var(--memo); border-top: 4px solid #fff3b0; color: var(--ink);
+  font-family: var(--display); font-size: 12px; letter-spacing: .14em;
+}
+.tower { position: absolute; inset: 0; pointer-events: none; }
+.tower.timber { transition: transform 1.1s cubic-bezier(.5, 0, 1, .6); }
+.stack-shrimp { position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); pointer-events: none; will-change: transform; }
+.stack-crab { position: absolute; left: 0; top: 0; z-index: 3; width: calc(var(--s) * .45); height: calc(var(--s) * .45); }
+.coat { position: absolute; z-index: 2; background: none 0 0 / 100% 100% no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; }
+.stack-head { position: absolute; z-index: 1; }
+.stack-head i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; }
+.stack-head.flip i { transform: scaleX(-1); }
+.stack-head.peek { animation: headpeek .18s ease-out; }
+@keyframes headpeek { from { scale: .5; opacity: .3; } }
+.stack-crab img { width: 100%; height: 100%; display: block; animation: crabstep .3s steps(2) infinite; }
+.stack-crab.leave { animation: crabdrop .9s ease-in forwards; }
+.room-toast {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
+  background: var(--ink); color: var(--fg); font-size: 14px; padding: 6px 10px;
+  border-left: 5px solid var(--fund); pointer-events: none;
+}
+.room-toast.bad { border-left-color: var(--reject); }
+.inspect-foot { display: flex; justify-content: space-between; font-family: var(--display); font-size: 16px; }
+.inspect-foot .writeups { color: var(--reject); font-variant-numeric: tabular-nums; }
+.shake { animation: shake .35s; }
+@keyframes shake { 20%,60% { transform: translateX(-8px) } 40%,80% { transform: translateX(8px) } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@media (max-height: 640px) {
+  .card .who img { width: 64px; height: 64px; }
+  .card .title { font-size: 17px; }
+  .memo { font-size: 12.5px; padding: 4px 8px; }
+}
+</style>
+
+<div class="app">
+  <div class="hud">
+    <div class="score"><small>Grants judged</small><span id="score">0</span></div>
+    <div class="lives" id="lives" aria-label="Lab safety rating"></div>
+  </div>
+  <div class="memos">
+    <h2>Committee rules</h2>
+    <div id="memos" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+  <div class="stage" id="stage"></div>
+  <div class="actions">
+    <button class="no" id="btnNo">REJECT</button>
+    <button class="yes" id="btnYes">FUND</button>
+  </div>
+  <p class="hint">Swipe the proposal left to reject, right to fund.</p>
+</div>
+
+<div class="screen" id="title">
+  <div class="panel">
+    <div class="trio">
+      <img class="pix" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAADBUlEQVR4AdyVMWhTURSGbwSLgwiGTpmkU6YiIg6ig0HQQUpFB4dOmaRDuzhmKNKxiw5O4pSpi1IcOkgEFYcoUuKSKXaQ0CEoSAdxif1u+B8nNzfvvTYJiOL/7rnnnHvO9+69fTnl/pF//w/Ij5Vr/VAn2eSJdgSAYv1DIRT+UFlwE4EAEGuA34ocwBjH6cQga6WFvmSLNy4v9q2IAcWYBnMsEDVm3Nr/6iTmUuVzqyDRXFCCwRdTLhA1UWNGW4y5pFzGEMiuCe1MEAqqSbg4NlcuI2sRQLFc60sFoQgF7YLj2Kx9Uqs46mStGwvCYgplFYjFTz9fdxJxYBjTFAXJgmjufXNWtsFh9ZadJvaN6hVvU9sbwSMKEuQkUzV/vdtMfNj4d3Y/Jb7r9Z6Laakz775cWIweVW4QmtGUbnduD94utAWzs9Bz71fmCbvy5pbXszcv/fzSfss97XYKfmIeIyBsXXg3gGANAK0H953V9vISIa/i4zW31/7l7Z8f2x6mXXvk53pwX+ihucYREAU0CoK5bbraafu3Kp+Zc/jfPay6V91D0oZg2B1gVm/eddgA+qTgEQVhi5HNZRdoKgDFmOPXdocw5AGAsLVj2FZDIGwZW3fve91VtmsOmIODnj+KcnHO0dQuDm1gkIWhMSKXkRg5zK2GQEhY32wkcWA49/bvP85+HYFKkiIGdWiIFN5odP3REZPPjkMgCrx90UzOWT5+vGQLKg2IhggYhI1UIxyjIHx8LpbPJbncATVPnEeGfHmAjtJT/0dBWHH+apnBi0bcHz+JPAQUCeV2jYCwfdwTHY92Zrl0duiLCJiUu1tK4giIzeWImAsGW803KiUHHL5pKArCrnDBaKAjAobGACBiCB/jpIqCUBQYjgjbwmBLxASMPYnGglA0hOGDxN0BEAFBDrmTKhXEFuc3gsb4dBzTgqBmbhCSuRvAoGlCUDsVhL8Q3p7dIFmaDoSqDcZUEBry9twNxO8FvsHS6T5TQdQKGDQrCPpkgtBcYsGslAkyq8Zh3b8AAAD//1DGLh0AAAAGSURBVAMAwNP7VNSuo5oAAAAASUVORK5CYII=" alt="">
+      <img class="pix" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAAC/UlEQVR4AcyWMWgUQRSG31mEICp6qMWBJASLLVQs5IrDxquukCOoSBCxsIopTglWIhJCsLLRQgTBQkIKKwkWh8XZiMVpcUSQq6KCXCURxCKkOfcb9i17k9m7ncsWCfnnzbyZee/bt5PNHJB98pMZZOvmxb6vfJ4xMwhBi6sfC1nFehscX5oygRAQgLQgLj/rbRHHtRbfSBA2L7V60ijN9NnQunCunybmhwmwtPmhICQH4unDqqwsnhEAJPypftko2ArdZp41iLGPUkGAAAAR8PDBk3LpdtmIOYRflQTD5wvjBCGJAsidlzL1qEnsWMw9+fHVvC7WxhNRR6F8YJwgUTxjpk6cMvbPp66xyQYY5IJhHUDYLEoF0cQ/l2vSqU2bWPhUxhE1w2CiJSNNKgg7XUnxu7RXmFSQTvevuOSCyMPnBHnW2yy87f1zxgfuW+OFc24vVXGCkEVhAEL40Pv6PYy0O9+NtZtxYVJBSAAMog8MulwrM5R3zbYT5v70WdE9ZmHGZiiIxiAwCiYnZGPumryZrYsC2ZXJrSJ8E1QKgn0+E/QXNrsF+gBh89RARQCQx+FBjGTGiWxJGCqDmLargs9XAyC6+Xqtol1jATCdsNF+UJyQ7vZO6MnnNwYxTx9WYrL8Wta35gVLdbgGzFWOi74WtXy+83xFMYg+15XTddPttH8byzWAewRAQFARrJnMsdkFsrZ2VLbbtySQxYE0SZjkxM7CDUHrzc+iSs5n7ccg/HnKg3mxZfxRNGCirjHJM1JcbsjVX6tGZtKziUHYR1JbnB1brMU3WzpEV84HR8yF6cOrttxdaeX/QdNkJFyqlkSlfgAMSdTw5eVBoqGXGaiIvZOgBLf9gCkE10f+EdprfMdDQZLBjlUCUSkEY9YAO+4rYT8aCaJVIRFnAFEBIPAh1iACjquRIAS2k1ARbm+uOXzjKBMIgYHhFSDGiNs8B5e+vwZ3ZAbRbRxU7edpvUC0KpwRpOcjDyAvEBIqDK+IPr485A1CUgAQ/bz0HwAA//+rfHanAAAABklEQVQDAGMe+VQgMXLgAAAAAElFTkSuQmCC" alt="">
+      <img class="pix" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAADa0lEQVR4AeyVQUhUURSGzwQOEREotBkIy0XMppAIFyGFs8lFhJCFRFC4qhYa4VJCpKUFupCgEAJxIS0iWrgaN2YxSYi1mEWZRYlEGISLaDO97zrn9t6d+94bIyLBYf459557zj3fO+/Oe7vkP/nsgLg3Yvt3ZP1SeyVN7lUnzevqiK9g0+RcJk2+vLAvDJYKQiIJblF8aXJz3LnuzT6xIAQhTSb4b4u9dc9YEAI0sHj8aKUv1+IVa2GR9yfyglB0qLgqWPR4dUNGVl57xVpYYSjG9ULVgFB4dLAgYQERtyFrYSlUYWEpg+qFiYAohFu04UG/bPSedt3euUKxFwHAYNNkQUikC76Eb/NlnzvRBxB7osTA6qIBIXiokKu6AnPtvjTfmhEAUOAx33q7YoKDH2AQ+wfTxK8BIaLxRN4Wbt5/AFdEi+XvgkqL7yVJkaTqpB4YAzK2upzpv12spol8GO40UgcAjLPjU/J0psTQyp0rpA2oDk7emzD/wuq0xhgQ18vtmJ0omQ4A0T7/XIAg7kxnG8YqPJ/uOmv9YaAnMy/l3KdJu+YbWBC6wrMDUTwcPHDwiFAELfV0m7HP5ndn7ZrmA1GYHhQujD9D3HmxICQCg/RZoBafSuN89vpyOdOV2ytYoNfWvkrTcJ/pbGt+HymxioBolBZVq37XjrfkKxRVy7o+NwD6cuMqrojiumJBaJlqrvSmYjTSHXm/aEEsu7sQ+FQA5ZuyUl7/aVzcbm4PMg7nx4Lgv3DzmIx+fidtrYc21fdQ8KmIAQIAxmkCpvxjE4Rbgzp6o4dd97Ag3Ibpu6/k2Z3zZm3q0aygt7kr0hYAGWfww1UGRrC8R9Kg2JezRkfIi5MFIYAkbEPDHrnY3WGFD1Gcq2SMRYy3Kj0nHAXNjYDg9HUFP13J9hxOfCgR54pikddHEMBzChjEeuCSGhCcKu2KzoHhvGiy+uMscQrB2eD26GEFBvHvIq4GhNtDV0pjl80Z4ZyguGJxfjaniG+dhyZ+wLCoBgSnSjuCVd9Wu0KxxuCFyruMQ6v7AMMccfFeEBboyljvKUGajKVTLxZXGNZ9XoBgT6SFGavYzAvCAkEfi+uCgFEBgU9jsD6RT1HEWGN+j9WzaWNBWCYJDUwuZMLCh4hJEjEoKUbXEkE06F/YHRC3y78AAAD//whGf9wAAAAGSURBVAMACCuyY0WGFlgAAAAASUVORK5CYII=" alt="">
+    </div>
+    <h1>Prawn Review Board</h1>
+    <p>You chair the grant committee at the world's leading underwater laboratory. Three shrimp scientists want money for their research.</p>
+    <p>Fund what follows the committee's rules. Reject what doesn't. Three bad calls and the Department of Fisheries shuts you down.</p>
+    <button class="big" id="btnStart">OPEN THE LAB</button>
+    <div class="crab-list" hidden>
+      <div class="from">Lab Crab's secret minigame list</div>
+      <div class="tests"><button class="testbtn" data-game="inspection">Lab Inspection</button><button class="testbtn" data-game="fizz">Fizz Containment</button><button class="testbtn" data-game="stack">Shrimp Stacking</button></div>
+    </div>
+    <p class="small" id="best"></p>
+  </div>
+  <button class="crab-walk" aria-label="Lab Crab. Tap for the minigame list"><img class="pix" alt=""></button>
+</div>
+
+<div class="screen memo-screen" id="memoScreen" hidden>
+  <div class="panel">
+    <div class="from" id="memoFrom">New memo from the committee</div>
+    <div class="memo" id="memoText"></div>
+    <p class="small" id="memoNote"></p>
+    <button class="big" id="btnMemo">NOTED</button>
+  </div>
+</div>
+
+<div class="screen" id="inspectIntro" hidden>
+  <div class="panel">
+    <img class="pix" id="introGrouper" alt="" style="width:144px;height:108px">
+    <h1>Lab Inspection!</h1>
+    <p>Inspector Grouper from the Department of Fisheries has arrived, holding a clipboard that has never once been used for good. The lab is full of things the committee banned. Some of them are still warm.</p>
+    <p>Back turned? Tap the contraband to stuff it somewhere. Inspector looking? Freeze. Touching anything while watched is "tampering with evidence", and there is a form for that.</p>
+    <p class="small">Don't touch the decoys. The microscope is very sensitive, the extinguisher is very full, and the intern is very asleep.</p>
+    <div class="legend"><span>Hide it</span><div id="legendHide"></div></div>
+    <div class="legend leave"><span>Do NOT touch</span><div id="legendLeave"></div></div>
+    <button class="big" id="btnInspect">START HIDING</button>
+  </div>
+</div>
+
+<div class="screen inspect" id="inspect" hidden>
+  <div class="inspect-wrap">
+    <div class="inspector away" id="inspector">
+      <img class="pix" id="grouper" alt="Inspector Grouper">
+      <div class="says"><b id="inspState">Back turned</b><span id="inspLine">Reading the fire exit sign very slowly.</span></div>
+    </div>
+    <div class="room" id="room"></div>
+    <div class="inspect-foot"><span id="inspRound">Sweep 1 of 3</span><span class="writeups" id="inspWrite">Write-ups: 0</span></div>
+  </div>
+</div>
+
+<div class="screen" id="fizzIntro" hidden>
+  <div class="panel">
+    <img class="pix" id="fizzIntroImg" alt="" style="width:120px;height:120px">
+    <h1>Fizz Containment!</h1>
+    <p>Prof. Fizz Bisque has started a reaction. Again. Bubbles are pouring out of the flask.</p>
+    <p>Pop them before they reach the ceiling. Big bubbles need two taps. If five get out, the lab goes boom. Nobody loses a flask. Fizz is used to it.</p>
+    <div class="legend"><span>Bonus</span><div><img class="pix" id="fizzIntroCrab" alt=""></div></div>
+    <p class="small">Lab Crab is riding one of the bubbles. Pop it to rescue him for a bonus grant.</p>
+    <button class="big" id="btnFizz">START POPPING</button>
+  </div>
+</div>
+
+<div class="screen inspect" id="fizz" hidden>
+  <div class="inspect-wrap">
+    <div class="inspector away">
+      <img class="pix" id="fizzImg" alt="Prof. Fizz Bisque" style="width:72px;height:72px">
+      <div class="says"><b>Prof. Fizz Bisque</b><span id="fizzLine"></span></div>
+    </div>
+    <div class="room fizz-room" id="fizzRoom"></div>
+    <div class="inspect-foot"><span id="fizzTime"></span><span class="writeups escaped" id="fizzEscaped"></span></div>
+  </div>
+</div>
+
+<div class="screen" id="stackIntro" hidden>
+  <div class="panel">
+    <img class="pix" id="stackIntroImg" alt="" style="width:120px;height:120px">
+    <h1>Shrimp Stacking!</h1>
+    <p>The Golden Clipboard goes to the tallest professor in the ocean. The lab doesn't have a tall professor. It has three shrimp and one very long lab coat.</p>
+    <p>Tap to drop each scientist onto the one below. Stack six to reach award height. Miss and they fall off. Lean too far and the whole professor topples.</p>
+    <div class="legend leave"><span>Watch out</span><div><img class="pix" id="stackIntroCrab" alt=""></div></div>
+    <p class="small">Lab Crab lives in the coat pocket. When he climbs up onto the professor's head, wait for him to leave. Drop a shrimp on him and he pinches, and everything wobbles.</p>
+    <button class="big" id="btnStack">START STACKING</button>
+  </div>
+</div>
+
+<div class="screen inspect" id="stack" hidden>
+  <div class="inspect-wrap">
+    <div class="inspector away">
+      <img class="pix" id="stackImg" alt="Dr. Scampi Longform" style="width:72px;height:72px">
+      <div class="says"><b>Dr. Scampi Longform</b><span id="stackLine"></span></div>
+    </div>
+    <div class="room stack-room" id="stackRoom"></div>
+    <div class="inspect-foot"><span id="stackHeight"></span><span class="writeups escaped" id="stackDrops"></span></div>
+  </div>
+</div>
+
+<div class="screen" id="inspectDone" hidden>
+  <div class="panel">
+    <img class="pix" id="doneGrouper" alt="" style="width:144px;height:108px">
+    <h1 id="doneHead">Inspection over</h1>
+    <p id="doneText"></p>
+    <div class="rank" id="doneReward"></div>
+    <button class="big" id="btnBackToWork">BACK TO WORK</button>
+  </div>
+</div>
+
+<div class="screen" id="over" hidden>
+  <div class="panel">
+    <div class="trio"><img class="pix" id="overShrimp" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAAC/UlEQVR4AcyWMWgUQRSG31mEICp6qMWBJASLLVQs5IrDxquukCOoSBCxsIopTglWIhJCsLLRQgTBQkIKKwkWh8XZiMVpcUSQq6KCXCURxCKkOfcb9i17k9m7ncsWCfnnzbyZee/bt5PNHJB98pMZZOvmxb6vfJ4xMwhBi6sfC1nFehscX5oygRAQgLQgLj/rbRHHtRbfSBA2L7V60ijN9NnQunCunybmhwmwtPmhICQH4unDqqwsnhEAJPypftko2ArdZp41iLGPUkGAAAAR8PDBk3LpdtmIOYRflQTD5wvjBCGJAsidlzL1qEnsWMw9+fHVvC7WxhNRR6F8YJwgUTxjpk6cMvbPp66xyQYY5IJhHUDYLEoF0cQ/l2vSqU2bWPhUxhE1w2CiJSNNKgg7XUnxu7RXmFSQTvevuOSCyMPnBHnW2yy87f1zxgfuW+OFc24vVXGCkEVhAEL40Pv6PYy0O9+NtZtxYVJBSAAMog8MulwrM5R3zbYT5v70WdE9ZmHGZiiIxiAwCiYnZGPumryZrYsC2ZXJrSJ8E1QKgn0+E/QXNrsF+gBh89RARQCQx+FBjGTGiWxJGCqDmLargs9XAyC6+Xqtol1jATCdsNF+UJyQ7vZO6MnnNwYxTx9WYrL8Wta35gVLdbgGzFWOi74WtXy+83xFMYg+15XTddPttH8byzWAewRAQFARrJnMsdkFsrZ2VLbbtySQxYE0SZjkxM7CDUHrzc+iSs5n7ccg/HnKg3mxZfxRNGCirjHJM1JcbsjVX6tGZtKziUHYR1JbnB1brMU3WzpEV84HR8yF6cOrttxdaeX/QdNkJFyqlkSlfgAMSdTw5eVBoqGXGaiIvZOgBLf9gCkE10f+EdprfMdDQZLBjlUCUSkEY9YAO+4rYT8aCaJVIRFnAFEBIPAh1iACjquRIAS2k1ARbm+uOXzjKBMIgYHhFSDGiNs8B5e+vwZ3ZAbRbRxU7edpvUC0KpwRpOcjDyAvEBIqDK+IPr485A1CUgAQ/bz0HwAA//+rfHanAAAABklEQVQDAGMe+VQgMXLgAAAAAElFTkSuQmCC" alt="" style="transform:rotate(180deg);animation:none"></div>
+    <h1>Lab Closed</h1>
+    <p id="overWhy"></p>
+    <div class="final" id="overScore">0</div>
+    <div class="rank" id="overRank"></div>
+    <p class="small" id="overBest"></p>
+    <button class="big" id="btnAgain">REOPEN THE LAB</button>
+    <div class="crab-list" hidden>
+      <div class="from">Lab Crab's secret minigame list</div>
+      <div class="tests"><button class="testbtn" data-game="inspection">Lab Inspection</button><button class="testbtn" data-game="fizz">Fizz Containment</button><button class="testbtn" data-game="stack">Shrimp Stacking</button></div>
+    </div>
+  </div>
+  <button class="crab-walk" aria-label="Lab Crab. Tap for the minigame list"><img class="pix" alt=""></button>
+</div>
+
+<script>
+const IMG = { specs: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAADBUlEQVR4AdyVMWhTURSGbwSLgwiGTpmkU6YiIg6ig0HQQUpFB4dOmaRDuzhmKNKxiw5O4pSpi1IcOkgEFYcoUuKSKXaQ0CEoSAdxif1u+B8nNzfvvTYJiOL/7rnnnHvO9+69fTnl/pF//w/Ij5Vr/VAn2eSJdgSAYv1DIRT+UFlwE4EAEGuA34ocwBjH6cQga6WFvmSLNy4v9q2IAcWYBnMsEDVm3Nr/6iTmUuVzqyDRXFCCwRdTLhA1UWNGW4y5pFzGEMiuCe1MEAqqSbg4NlcuI2sRQLFc60sFoQgF7YLj2Kx9Uqs46mStGwvCYgplFYjFTz9fdxJxYBjTFAXJgmjufXNWtsFh9ZadJvaN6hVvU9sbwSMKEuQkUzV/vdtMfNj4d3Y/Jb7r9Z6Laakz775cWIweVW4QmtGUbnduD94utAWzs9Bz71fmCbvy5pbXszcv/fzSfss97XYKfmIeIyBsXXg3gGANAK0H953V9vISIa/i4zW31/7l7Z8f2x6mXXvk53pwX+ihucYREAU0CoK5bbraafu3Kp+Zc/jfPay6V91D0oZg2B1gVm/eddgA+qTgEQVhi5HNZRdoKgDFmOPXdocw5AGAsLVj2FZDIGwZW3fve91VtmsOmIODnj+KcnHO0dQuDm1gkIWhMSKXkRg5zK2GQEhY32wkcWA49/bvP85+HYFKkiIGdWiIFN5odP3REZPPjkMgCrx90UzOWT5+vGQLKg2IhggYhI1UIxyjIHx8LpbPJbncATVPnEeGfHmAjtJT/0dBWHH+apnBi0bcHz+JPAQUCeV2jYCwfdwTHY92Zrl0duiLCJiUu1tK4giIzeWImAsGW803KiUHHL5pKArCrnDBaKAjAobGACBiCB/jpIqCUBQYjgjbwmBLxASMPYnGglA0hOGDxN0BEAFBDrmTKhXEFuc3gsb4dBzTgqBmbhCSuRvAoGlCUDsVhL8Q3p7dIFmaDoSqDcZUEBry9twNxO8FvsHS6T5TQdQKGDQrCPpkgtBcYsGslAkyq8Zh3b8AAAD//1DGLh0AAAAGSURBVAMAwNP7VNSuo5oAAAAASUVORK5CYII=", fizz: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAAC/UlEQVR4AcyWMWgUQRSG31mEICp6qMWBJASLLVQs5IrDxquukCOoSBCxsIopTglWIhJCsLLRQgTBQkIKKwkWh8XZiMVpcUSQq6KCXCURxCKkOfcb9i17k9m7ncsWCfnnzbyZee/bt5PNHJB98pMZZOvmxb6vfJ4xMwhBi6sfC1nFehscX5oygRAQgLQgLj/rbRHHtRbfSBA2L7V60ijN9NnQunCunybmhwmwtPmhICQH4unDqqwsnhEAJPypftko2ArdZp41iLGPUkGAAAAR8PDBk3LpdtmIOYRflQTD5wvjBCGJAsidlzL1qEnsWMw9+fHVvC7WxhNRR6F8YJwgUTxjpk6cMvbPp66xyQYY5IJhHUDYLEoF0cQ/l2vSqU2bWPhUxhE1w2CiJSNNKgg7XUnxu7RXmFSQTvevuOSCyMPnBHnW2yy87f1zxgfuW+OFc24vVXGCkEVhAEL40Pv6PYy0O9+NtZtxYVJBSAAMog8MulwrM5R3zbYT5v70WdE9ZmHGZiiIxiAwCiYnZGPumryZrYsC2ZXJrSJ8E1QKgn0+E/QXNrsF+gBh89RARQCQx+FBjGTGiWxJGCqDmLargs9XAyC6+Xqtol1jATCdsNF+UJyQ7vZO6MnnNwYxTx9WYrL8Wta35gVLdbgGzFWOi74WtXy+83xFMYg+15XTddPttH8byzWAewRAQFARrJnMsdkFsrZ2VLbbtySQxYE0SZjkxM7CDUHrzc+iSs5n7ccg/HnKg3mxZfxRNGCirjHJM1JcbsjVX6tGZtKziUHYR1JbnB1brMU3WzpEV84HR8yF6cOrttxdaeX/QdNkJFyqlkSlfgAMSdTw5eVBoqGXGaiIvZOgBLf9gCkE10f+EdprfMdDQZLBjlUCUSkEY9YAO+4rYT8aCaJVIRFnAFEBIPAh1iACjquRIAS2k1ARbm+uOXzjKBMIgYHhFSDGiNs8B5e+vwZ3ZAbRbRxU7edpvUC0KpwRpOcjDyAvEBIqDK+IPr485A1CUgAQ/bz0HwAA//+rfHanAAAABklEQVQDAGMe+VQgMXLgAAAAAElFTkSuQmCC", scampi: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACIAAAAiCAYAAAA6RwvCAAADa0lEQVR4AeyVQUhUURSGzwQOEREotBkIy0XMppAIFyGFs8lFhJCFRFC4qhYa4VJCpKUFupCgEAJxIS0iWrgaN2YxSYi1mEWZRYlEGISLaDO97zrn9t6d+94bIyLBYf459557zj3fO+/Oe7vkP/nsgLg3Yvt3ZP1SeyVN7lUnzevqiK9g0+RcJk2+vLAvDJYKQiIJblF8aXJz3LnuzT6xIAQhTSb4b4u9dc9YEAI0sHj8aKUv1+IVa2GR9yfyglB0qLgqWPR4dUNGVl57xVpYYSjG9ULVgFB4dLAgYQERtyFrYSlUYWEpg+qFiYAohFu04UG/bPSedt3euUKxFwHAYNNkQUikC76Eb/NlnzvRBxB7osTA6qIBIXiokKu6AnPtvjTfmhEAUOAx33q7YoKDH2AQ+wfTxK8BIaLxRN4Wbt5/AFdEi+XvgkqL7yVJkaTqpB4YAzK2upzpv12spol8GO40UgcAjLPjU/J0psTQyp0rpA2oDk7emzD/wuq0xhgQ18vtmJ0omQ4A0T7/XIAg7kxnG8YqPJ/uOmv9YaAnMy/l3KdJu+YbWBC6wrMDUTwcPHDwiFAELfV0m7HP5ndn7ZrmA1GYHhQujD9D3HmxICQCg/RZoBafSuN89vpyOdOV2ytYoNfWvkrTcJ/pbGt+HymxioBolBZVq37XjrfkKxRVy7o+NwD6cuMqrojiumJBaJlqrvSmYjTSHXm/aEEsu7sQ+FQA5ZuyUl7/aVzcbm4PMg7nx4Lgv3DzmIx+fidtrYc21fdQ8KmIAQIAxmkCpvxjE4Rbgzp6o4dd97Ag3Ibpu6/k2Z3zZm3q0aygt7kr0hYAGWfww1UGRrC8R9Kg2JezRkfIi5MFIYAkbEPDHrnY3WGFD1Gcq2SMRYy3Kj0nHAXNjYDg9HUFP13J9hxOfCgR54pikddHEMBzChjEeuCSGhCcKu2KzoHhvGiy+uMscQrB2eD26GEFBvHvIq4GhNtDV0pjl80Z4ZyguGJxfjaniG+dhyZ+wLCoBgSnSjuCVd9Wu0KxxuCFyruMQ6v7AMMccfFeEBboyljvKUGajKVTLxZXGNZ9XoBgT6SFGavYzAvCAkEfi+uCgFEBgU9jsD6RT1HEWGN+j9WzaWNBWCYJDUwuZMLCh4hJEjEoKUbXEkE06F/YHRC3y78AAAD//whGf9wAAAAGSURBVAMACCuyY0WGFlgAAAAASUVORK5CYII=" };
+const SCI = {
+  specs:  { name: "Dr. Krill Specsworth", dept: "Optics. Has never once seen clearly." },
+  fizz:   { name: "Prof. Fizz Bisque",    dept: "Chemistry. Banned from two oceans." },
+  scampi: { name: "Dr. Scampi Longform",  dept: "Paperwork. Mostly paperwork." },
+};
+const TITLES = {
+  BUBBLES: [
+    "Are bubbles just shy air?", "Teaching a bubble to hold its breath", "The Big Bubble Theory",
+    "Can a bubble be popped politely?", "Where do bubbles go when they reach the top?",
+    "Square bubbles: why won't they cooperate?", "Is a bubble just a room with no furniture?",
+    "Bubble wrap: who is it protecting, and from what?", "Naming every bubble in the tank (we're up to Kevin 4,012)",
+    "Do bubbles know they're going up, or is it a surprise every time?", "Building a bubble big enough to live in, then living in it",
+    "Burps as a renewable energy source", "How many bubbles make one breakfast?", "Bubbles in reverse: a study of going down",
+  ],
+  CRABS: [
+    "Why do crabs walk sideways? (We asked. They were rude.)", "A crab-to-shrimp phrasebook, volume one",
+    "Is a crab just a shrimp that went to the gym?", "Sideways walking as a lifestyle choice",
+    "Are the crabs plotting something? (Yes.)", "Teaching a crab to walk forwards, then running away",
+    "Interview with a hermit crab who refused to come out", "Why does every crab think it's the main character?",
+    "Crab claws vs. paperwork: which pinches harder?", "Tracking crab gossip across the reef",
+    "Is it rude to call a crab crabby? We asked. It was.", "Disguising a shrimp as a crab for undercover work",
+    "Mapping where the crabs hide the stolen snacks", "Crab handshakes: why do they always hurt?",
+  ],
+  BOOM: [
+    "What if we put the fizzy thing next to the other fizzy thing", "A controlled explosion (controlled is a strong word)",
+    "Small bang, medium bang, big bang: a comparison", "Measuring loudness by ear, until the ear stops working",
+    "Can we make the volcano bigger?", "Fireworks, but wet", "Shaking the beaker to see what happens",
+    "Does the red button do anything? Only one way to find out", "A gentle explosion, for beginners",
+    "Sneezing next to the fizzy jar, 100 trials", "Rebuilding the east wing so we can explode it properly",
+    "How loud is too loud? (Please speak up.)", "Teaching pufferfish to inflate on command",
+    "Adding more of the thing that went boom last time",
+  ],
+  MOON: [
+    "Is the moon a big pearl someone dropped?", "Tides: is the moon pulling or are we pushing?",
+    "Building a ladder to the moon out of kelp", "Asking the moon what it wants from us",
+    "Is the moon just a very far away sand dollar?", "Why does the moon only come out at night? Is it shy?",
+    "Moon cheese: a tasting proposal", "Waving at the moon until it waves back",
+    "Does the moon have shrimp, and are they doing better than us?", "Mailing a letter to the moon by seagull",
+    "Is the moon following us, or are we following the moon?", "Measuring the moon with a very long ruler",
+    "Who keeps turning the moon down at the end of the month?", "Do moonbeams taste like lemon?",
+  ],
+  SNACKS: [
+    "Plankton: crunchy or chewy?", "We ate the control group. Requesting a new control group.",
+    "Seaweed tasting, 400 samples, no breaks", "Can a snack be too small? (Yes. We checked.)",
+    "Is kelp a vegetable or a lifestyle?", "The perfect crumb: a ten-year study",
+    "Does deep-sea pressure make crisps crunchier?", "How many plankton fit in one cheek?",
+    "Mid-morning snack vs. pre-lunch snack: a showdown", "Recreating the legendary 1998 algae cracker",
+    "Can you eat a snack in a dream and still feel full?", "Sorting fish flakes by flavour (they're all the same flavour)",
+    "The ethics of eating the last krill puff", "Inventing a sandwich that doesn't go soggy underwater",
+  ],
+  FEELINGS: [
+    "Do sea cucumbers ever get sad?", "Why does the anglerfish seem so lonely?",
+    "Group therapy for an entire coral reef", "Measuring awkwardness at the bottom of the ocean",
+    "Does the octopus need a hug, or eight?", "Why do jellyfish always look so calm?",
+    "Teaching clams to open up", "Are eels just nervous noodles?",
+    "How to tell a starfish you need space", "Is the tide coming in, or coming back to apologise?",
+    "Mood rings for lobsters", "Do barnacles ever want to move out?",
+    "Measuring how much the reef believes in itself", "Why the pufferfish gets so defensive in meetings",
+  ],
+};
+// Budget range per topic, in krill. Snacks are cheap, explosions and moon trips are not.
+const COSTS = { BUBBLES: [10, 90], CRABS: [5, 99], BOOM: [30, 99], MOON: [40, 99], SNACKS: [5, 40], FEELINGS: [5, 70] };
+const PLEAS = [
+  "\"Trust me, I'm a doctor. Of shrimp.\"", "\"I've already bought the goggles.\"", "\"This could change everything. Or nothing.\"",
+  "\"Please. My tank is so small.\"", "\"Peer reviewed by my mum.\"", "\"Results guaranteed, or your krill back.\"",
+  "\"I had this idea in the shower. I live in water.\"", "\"Fizz said it was fine.\"", "\"My clipboard believes in me.\"",
+  "\"My nan funded this once. Then she stopped.\"", "\"It's for science. And also for me.\"",
+  "\"There's a 60% chance nothing explodes.\"", "\"I made a slideshow. It has transitions.\"",
+  "\"The other shrimp laughed at me. Prove them wrong.\"", "\"I already told my friends you said yes.\"",
+  "\"Hypothesis: you'll love this.\"", "\"I'll name a bubble after you.\"",
+  "\"It's basically free. Don't look at the number.\"", "\"This is not a scam. Scams have better fonts.\"",
+  "\"Imagine the headlines. Now imagine them wet.\"", "\"I'm so close I can taste it. Possibly literally.\"",
+  "\"Specs checked my maths. Specs can't see.\"", "\"Funding me is the scientific thing to do.\"",
+  "\"I've been shrimping my whole life for this.\"",
+];
+
+// Rules say what must be rejected. ok(p) is true when the rule lets p through.
+const RULES = [
+  { id: "crabs", text: "No CRAB research. We don't talk about the crabs.", ok: p => p.topic !== "CRABS",
+    bad: ["The crabs found out about the study. They have unionised.", "Lab Crab now sits on the committee. Nobody knows how he got the chair.", "The crabs read the paper. They gave it one star, sideways."] },
+  { id: "budget", text: "Budget freeze: reject anything over 60 krill.", ok: p => p.cost <= 60,
+    bad: ["The lab now owes 4,000 krill to a moray eel named Gary.", "The lab sold its only microscope to pay the bill. Now nothing is small.", "Accounting has fainted. Accounting is also a shrimp."] },
+  { id: "fizz", text: "Prof. Fizz Bisque is banned after The Incident.", ok: p => p.sci !== "fizz",
+    bad: ["Fizz did it again. Somebody bring a mop. And a fire extinguisher.", "Fizz has turned the break room purple. Permanently.", "Fizz says the smell will be gone by spring."] },
+  { id: "boom", text: "No more BOOM. The lab still has no ceiling.", ok: p => p.topic !== "BOOM",
+    bad: ["BOOM. Well, that was the east wing.", "BOOM. The fish next door would like their windows back.", "Everyone is fine. Everyone is also slightly crispy."] },
+  { id: "moon", text: "The moon is a hoax. No MOON research.", ok: p => p.topic !== "MOON",
+    bad: ["The moon has filed a formal complaint.", "Believing in the moon has gone on your permanent record.", "The tides are confused now and won't leave the lab."] },
+  { id: "odd", text: "Odd budgets are bad luck. Reject them.", ok: p => p.cost % 2 === 0,
+    bad: ["A black cat walked under a ladder. Underwater. Nobody knows how.", "The lab's only mirror broke. Nobody knows what they look like any more.", "An odd number got loose in the lab. It's hiding behind the fridge."] },
+  { id: "scampi", text: "Dr. Scampi's paperwork is overdue. No Scampi proposals.", ok: p => p.sci !== "scampi",
+    bad: ["Scampi's overdue paperwork has become sentient and wants a desk.", "Scampi sent 600 pages of appendices. They're all about other appendices.", "Scampi spent the whole grant on more clipboards."] },
+  { id: "feelings", text: "Feelings are not science. Reject FEELINGS.", ok: p => p.topic !== "FEELINGS",
+    bad: ["The whole committee cried in the meeting. Nobody enjoyed it.", "The committee had to say how the report made them feel. It took four hours.", "Now the sea cucumbers want therapy too. There's a waiting list."] },
+  { id: "snacks", text: "SNACK research only if it costs under 20 krill.", ok: p => p.topic !== "SNACKS" || p.cost < 20,
+    bad: ["The snack budget ate the real budget. Literally.", "The entire grant went on one very fancy cracker.", "The research team ate the research."] },
+  { id: "bubbles", text: "BUBBLES need a budget over 30 krill. Cheap bubbles pop.", ok: p => p.topic !== "BUBBLES" || p.cost > 30,
+    bad: ["The discount bubbles burst all at once. Very loud. Very wet.", "The cheap bubbles arrived already popped.", "Budget bubbles are just air with low self-esteem."] },
+];
+const GOOD_FUND = [
+  "Published in Nature (Shrimp Edition).", "Breakthrough! Mostly a wet one.", "The results are in and they are moist.",
+  "A small step for shrimp. A tiny step, really.", "Peer reviewed. The peers were impressed.", "Nobody exploded. Huge success.",
+  "The paper has 3 citations already. All from the same shrimp.", "The results were so good the beaker blushed.",
+  "Science happened. Probably.", "The research team did a little dance. It was mostly legs.",
+  "Big discovery: it was in the tank all along.", "At least four fish will read this paper.",
+  "Your name is in the acknowledgements. Spelled wrong, but still.", "Money well spent. The receipt is soggy but legible.",
+];
+const GOOD_REJECT = [
+  "Good call. The committee nods slowly.", "Rejected. The shrimp sulks into a beaker.", "Correct. The proposal is now a paper hat.",
+  "Into the shredder it goes.", "The committee approves of your disapproval.", "Denied. The scientist will be fine. Eventually.",
+  "Rules are rules. Even the weird ones.", "The proposal sinks slowly to the bottom of the tank.",
+  "Rejected with a very firm flipper.", "Good eye. Better than Specs's, anyway.",
+  "Back to the drawing board. The drawing board is also wet.",
+];
+const WRONG_REJECT = [
+  "That one followed every rule! The scientist is crying into a test tube.", "That was a perfectly good idea. Now it's a sad paper boat.",
+  "You rejected a rule-abiding proposal. The scientist has started a podcast about it.", "That was fine! The committee is giving you a Look.",
+  "Nothing wrong with it! The committee is writing your name on a very small list.", "Rejected for no reason. The scientist is now writing an angry memoir.",
+  "It broke zero rules. The committee counted twice.", "That was the best idea all week and you shredded it.",
+];
+const TIMEOUT = [
+  "You stared at the proposal until it dissolved. It's very wet down here.", "Too slow. The scientist got bored and funded it with their own lunch money.",
+  "The proposal floated away while you were thinking.", "Time's up. The scientist fell asleep on the form.",
+  "You took so long the proposal needed its own proposal.", "Time's up. The committee assumed you'd gone for snacks.",
+];
+const RANKS = [[0, "Unpaid Intern Krill"], [5, "Lab Assistant (on probation)"], [10, "Associate Professor of Wet"], [18, "Head of the Department of Damp"], [28, "Distinguished Prawnfessor"], [40, "Nobel Prawn Laureate"]];
+
+const $ = id => document.getElementById(id);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+// Deals every line in a list once before any line comes round again.
+const bags = new Map();
+const deal = a => { let b = bags.get(a); if (!b || !b.length) { b = a.slice().sort(() => Math.random() - .5); bags.set(a, b); } return b.pop(); };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+let S, current, timerStart, timerLen, raf, busy = false;
+
+function newState() { return { score: 0, lives: 3, rules: [], pool: RULES.slice().sort(() => Math.random() - .5), formNo: 101, nextMemo: 5, nextBonus: 15, bonusCount: 0 }; }
+
+function makeProposal() {
+  const sci = pick(Object.keys(SCI));
+  const topic = pick(Object.keys(TITLES));
+  const [lo, hi] = COSTS[topic];
+  return { sci, topic, cost: lo + Math.floor(Math.random() * (hi - lo + 1)) };
+}
+// About half the proposals should break a rule, so both buttons get used.
+function nextProposal() {
+  const wantBad = S.rules.length && Math.random() < .5;
+  let p;
+  for (let i = 0; i < 60; i++) {
+    p = makeProposal();
+    if (S.rules.every(r => r.ok(p)) !== !!wantBad) break;
+  }
+  return { ...p, title: deal(TITLES[p.topic]), plea: deal(PLEAS) };
+}
+
+function renderHud() {
+  $("score").textContent = S.score;
+  $("lives").innerHTML = [0, 1, 2].map(i => `<span class="life ${i < S.lives ? "" : "gone"}"></span>`).join("");
+}
+function renderMemos(freshId) {
+  $("memos").innerHTML = S.rules.length
+    ? S.rules.map(r => `<div class="memo ${r.id === freshId ? "fresh" : ""}">${r.text}</div>`).join("")
+    : `<div class="memo">No rules yet. Fund everything. What could go wrong?</div>`;
+}
+
+function showCard() {
+  current = nextProposal();
+  const p = current, sc = SCI[p.sci];
+  $("stage").innerHTML = `
+    <div class="card" id="card">
+      <div class="formno"><span>Grant form ${S.formNo++}-B</span><span>Time to decide</span></div>
+      <div class="timer"><i id="bar"></i></div>
+      <div class="who"><img class="pix" src="${IMG[p.sci]}" alt=""><div><div class="name">${sc.name}</div><div class="dept">${sc.dept}</div></div></div>
+      <p class="title">${p.title}</p>
+      <p class="plea">${p.plea}</p>
+      <div class="facts"><span class="tag">${p.topic}</span><span class="tag cost">Budget: ${p.cost} krill</span></div>
+      <div class="stamp fund" id="stFund">FUNDED</div>
+      <div class="stamp reject" id="stReject">REJECTED</div>
+    </div>`;
+  timerLen = Math.max(4200, 10000 - S.score * 220);
+  timerStart = performance.now();
+  busy = false;
+  bindSwipe($("card"));
+  cancelAnimationFrame(raf);
+  const tick = t => {
+    const left = 1 - (t - timerStart) / timerLen;
+    const bar = $("bar");
+    if (!bar || busy) return;
+    bar.style.transform = `scaleX(${Math.max(0, left)})`;
+    if (left <= 0) return decide(null);
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+function decide(fund) {
+  if (busy) return;
+  busy = true;
+  cancelAnimationFrame(raf);
+  const p = current, broken = S.rules.find(r => !r.ok(p));
+  const shouldFund = !broken;
+  const card = $("card");
+  let good, head, msg;
+  if (fund === null) { good = false; head = "Out of time!"; msg = deal(TIMEOUT); }
+  else if (fund === shouldFund) { good = true; head = fund ? "Funded!" : "Rejected!"; msg = fund ? deal(GOOD_FUND) : deal(GOOD_REJECT); }
+  else if (fund) { good = false; head = "Uh oh."; msg = deal(broken.bad); }
+  else { good = false; head = "Hey!"; msg = deal(WRONG_REJECT); }
+
+  if (fund !== null) {
+    const st = $(fund ? "stFund" : "stReject");
+    st.style.transition = "opacity .1s, transform .15s";
+    st.style.opacity = 1;
+    card.style.transition = "transform .45s ease-in .35s, opacity .45s .35s";
+    card.style.transform = `translateX(${fund ? 130 : -130}%) rotate(${fund ? 18 : -18}deg)`;
+    card.style.opacity = 0;
+  } else {
+    card.style.transition = "opacity .5s, transform .5s";
+    card.style.opacity = .15; card.style.transform = "scale(.9)";
+  }
+  if (good) S.score++; else { S.lives--; document.querySelector(".app").classList.add("shake"); setTimeout(() => document.querySelector(".app").classList.remove("shake"), 400); }
+  renderHud();
+  const v = document.createElement("div");
+  v.className = "verdict" + (good ? "" : " bad");
+  v.innerHTML = `<b>${head}</b>${msg}`;
+  $("stage").appendChild(v);
+  setTimeout(() => {
+    if (S.lives <= 0) return gameOver(msg);
+    afterCard();
+  }, good ? 1300 : 2300);
+}
+
+// Every 15 points the inspector visits; every 5 the committee sends a memo.
+function afterCard() {
+  if (S.score >= S.nextBonus) { S.nextBonus += 15; return MINIGAMES[S.bonusCount++ % MINIGAMES.length](); }
+  if (S.score >= S.nextMemo) { S.nextMemo += 5; return newMemo(); }
+  showCard();
+}
+
+function newMemo() {
+  const rule = S.pool.shift() || pick(RULES);
+  let note = "Proposals that break any rule get rejected. Everything else gets funded.";
+  if (S.rules.length >= 3) {
+    const old = S.rules.shift();
+    note = `The committee forgot all about: "${old.text}" You can ignore that one now.`;
+    S.pool.push(old);
+  }
+  S.rules.push(rule);
+  $("memoFrom").textContent = S.rules.length === 1 ? "Your first memo from the committee" : "New memo from the committee";
+  $("memoText").textContent = rule.text;
+  $("memoNote").textContent = note;
+  $("memoScreen").hidden = false;
+  renderMemos(rule.id);
+  $("btnMemo").focus();
+}
+
+// ---- Lab Inspection minigame ----
+// Pixel sprites drawn from letter grids; each letter is one colour, "." is see-through.
+const SPRITE_PAL = { b: "#23324a", d: "#3e4a2a", g: "#7a8f52", s: "#56693a", w: "#ffffff", k: "#1e141c", l: "#d9906a", r: "#e8503a", y: "#ffd95a", n: "#4a6a9a", c: "#e0b064", o: "#a8702e", p: "#a35bd6", q: "#cfe8f0", u: "#c0607a", t: "#6ec8ff", e: "#9aa6ad" };
+function sprite(rows) {
+  const c = document.createElement("canvas");
+  c.width = Math.max(...rows.map(r => r.length)); c.height = rows.length;
+  const x = c.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((ch, i) => { if (SPRITE_PAL[ch]) { x.fillStyle = SPRITE_PAL[ch]; x.fillRect(i, y, 1, 1); } }));
+  return c.toDataURL();
+}
+const GROUPER = sprite([
+  "......bbbbbb....",
+  ".....bbbbbbbb...",
+  "d...dddddddddd..",
+  "dd.dggggggggggd.",
+  "dgdgggsgggggwkgd",
+  "dggggggggsggwwgl",
+  "dgdgggsggggggggl",
+  "dd.dggggggsgggd.",
+  "d...dgggggggdd..",
+  ".....dddddddd...",
+  "......d...d.....",
+]);
+const EVIDENCE = [
+  { name: "Lab Crab", hide: "Lab Crab is now a lamp.", spotted: "\"Is that crab wearing a lab coat? Is that... Lab Crab?\"", img: sprite([
+    ".r........r.", "rr.r....r.rr", ".rr......rr.", "..rrrrrrrr..", ".rrkrrrrkrr.", ".rrrrrrrrrr.",
+    ".wwwwrrwwww.", ".wwwwwewwww.", ".wewwwewwew.", "..wwwwewww..", ".r.r....r.r.", "r..r....r..r"]) },
+  { name: "A moon telescope", hide: "The telescope is now a coat rack.", spotted: "\"Why is there a telescope pointed at the moon?\"", img: sprite([
+    "..........yy", ".........yy.", "............", ".......nn...", "......nnnn..", ".....nnnn...",
+    "....nnnn....", "...nnnn.....", "....n.n.....", "...n...n....", "..n.....n..."]) },
+  { name: "A krill puff", hide: "Evidence eaten.", spotted: "\"Are those snacks on a lab bench?\"", img: sprite([
+    "............", "............", "..cccccccc..", ".cccccccccc.", ".cocccocccc.", ".ccccccccoc.",
+    ".cccccocccc.", ".coccccccoc.", ".cccccccccc.", "..cccccccc.."]) },
+  { name: "Fizz's purple jar", hide: "Jar relabelled SOUP.", spotted: "\"What's in the purple jar? Why is it humming?\"", img: sprite([
+    "....qqqq....", ".....qq.....", ".....qq.....", "....qppq....", "...qppppq...", "..qppppppq..",
+    ".qppkppkppq.", ".qppppppppq.", ".qppppppppq.", "..qqqqqqqq.."]) },
+  { name: "A weeping sea cucumber", hide: "Sea cucumber told to act natural.", spotted: "\"Why is that sea cucumber crying?\"", img: sprite([
+    "............", "............", "............", "...uuuuuu...", ".uuuuuuuuuu.", "uuukuuuukuuu",
+    "uuuuuuuuuuuu", ".uuuuuuuuuu.", "..t.uuuuuu..", "..t........."]) },
+  { name: "Scampi's overdue paperwork", hide: "Filed under Later.", spotted: "\"Whose overdue paperwork is this?\"", img: sprite([
+    "............", "..wwwwwww...", "..weeeeew...", "..wwwwwwww..", ".weeeeeeew..", ".wwwwwwwwww.",
+    ".weeeeeeeew.", "wwwwwwwwwww.", "weeeeeeeeew.", "wwwwwwwwwwww", "wwwwwwwwwwww"]) },
+];
+// Lab Crab: the recurring crab in a little lab coat (he). Reuse his sprite in the other minigames.
+const LAB_CRAB = EVIDENCE[0].img;
+// Approved things that belong in the lab. Tapping them backfires.
+const DECOYS = [
+  { decoy: "microscope", name: "An approved microscope", img: sprite([
+    "...kk.......", "...ek.......", "...eek......", "....eek.....", "....eeek....", "..kkk.eek...",
+    "..kek..ek...", "......eek...", "..kkkkkek...", "...eeeeek...", ".kkkkkkkkkk.", ".eeeeeeeeee."]) },
+  { decoy: "foam", name: "A fire extinguisher", img: sprite([
+    "....kkk.....", "....kk.kk...", "...rrrr..k..", "..rrrrrr....", "..rrrrrr....", "..rwwwwr....",
+    "..rwwwwr....", "..rrrrrr....", "..rrrrrr....", "..rrrrrr....", "..rrrrrr....", "...rrrr....."]) },
+  { decoy: "intern", name: "A sleeping intern" },
+];
+const AWAY_LINES = ["Reading the fire exit sign very slowly.", "Checking the fridge temperature.", "Counting the ceiling tiles. There is no ceiling.", "Writing something down. Underlining it twice.", "Tapping the barometer and frowning at it.", "Sniffing a beaker. Regretting it."];
+const CLEAR_LINES = ["\"Hm. Spotless.\"", "\"Carry on.\"", "\"Suspiciously tidy.\"", "\"Nothing to see here, apparently.\""];
+const SWEEPS = 3;
+let I = null;
+
+function runInspection() {
+  $("introGrouper").src = GROUPER;
+  const icon = src => `<img class="pix" src="${src}" alt="">`;
+  $("legendHide").innerHTML = EVIDENCE.map(ev => icon(ev.img)).join("");
+  $("legendLeave").innerHTML = DECOYS.map(ev => icon(ev.img || IMG.specs)).join("");
+  $("inspectIntro").hidden = false;
+  $("btnInspect").focus();
+}
+function beginInspection() {
+  $("inspectIntro").hidden = true;
+  $("inspect").hidden = false;
+  $("room").innerHTML = "";
+  $("grouper").src = GROUPER;
+  I = { sweep: 0, writeups: 0, phase: "away", items: [], timers: [] };
+  nextSweep();
+}
+const later = (fn, ms) => { const id = setTimeout(fn, ms); I.timers.push(id); return id; };
+function inspectFoot() {
+  $("inspRound").textContent = `Sweep ${Math.min(I.sweep, SWEEPS)} of ${SWEEPS}`;
+  $("inspWrite").textContent = `Write-ups: ${I.writeups}`;
+}
+function setPhase(phase, line) {
+  I.phase = phase;
+  $("inspector").className = "inspector " + phase;
+  $("inspState").textContent = { away: "Back turned", turning: "Turning around!", looking: "LOOKING" }[phase];
+  $("inspLine").textContent = line;
+  $("room").classList.toggle("lit", phase === "looking");
+}
+// Each sweep: evidence keeps appearing while the inspector's back is turned, a short warning, then a look.
+function nextSweep() {
+  const n = I.sweep++;
+  if (n >= SWEEPS) return endInspection();
+  inspectFoot();
+  setPhase("away", deal(AWAY_LINES));
+  spawnEvidence(); spawnEvidence();
+  const awayMs = 3600 - n * 200, every = [750, 580, 450][n], sweep = I.sweep;
+  for (let t = every; t < awayMs; t += every) later(() => I.phase === "away" && I.sweep === sweep && spawnEvidence(), t);
+  I.turnT = later(() => setPhase("turning", "Act natural!"), awayMs);
+  I.lookT = later(look, awayMs + 700);
+}
+// Hiding the microscope makes the inspector suspicious, so the look comes early.
+function turnEarly() {
+  if (I.phase !== "away") return;
+  clearTimeout(I.turnT); clearTimeout(I.lookT);
+  setPhase("turning", "\"Wait. Where did the microscope go?\"");
+  I.lookT = later(look, 700);
+}
+function foamRoom() {
+  const f = document.createElement("div");
+  f.className = "foam";
+  $("room").appendChild(f);
+  later(() => f.remove(), 1700);
+}
+function look() {
+  const out = I.items.filter(it => !it.gone && !it.ev.decoy);
+  out.forEach(it => it.el.classList.add("spotted"));
+  I.writeups += out.length;
+  setPhase("looking", out.length ? out[0].ev.spotted : deal(CLEAR_LINES));
+  inspectFoot();
+  // The shrimp can't help themselves: new evidence turns up mid-look. Tapping it now gets you caught.
+  if (I.sweep < SWEEPS) { later(spawnEvidence, 350); later(spawnEvidence, 850); }
+  later(() => { out.forEach(removeItem); nextSweep(); }, 1400);
+}
+function spawnEvidence(force) {
+  if (I.phase === "turning" && !force) return;
+  const live = I.items.filter(it => !it.gone);
+  const used = new Set(live.map(it => it.slot));
+  const free = [...Array(12).keys()].filter(s => !used.has(s));
+  if (!free.length) return;
+  // Up to two decoys at a time, and never from the intern knocking things over.
+  const decoysOut = live.filter(it => it.ev.decoy).length;
+  const slot = pick(free), ev = !force && decoysOut < 2 && Math.random() < .3 ? pick(DECOYS) : pick(EVIDENCE);
+  const el = document.createElement("button");
+  el.className = "evidence" + (ev.decoy ? ` decoy ${ev.decoy}` : "");
+  el.setAttribute("aria-label", ev.name);
+  el.style.left = `${18 + (slot % 3) * 32 + Math.random() * 8 - 4}%`;
+  el.style.top = `${14 + Math.floor(slot / 3) * 24 + Math.random() * 6 - 3}%`;
+  el.innerHTML = `<img class="pix" src="${ev.img || pick(Object.values(IMG))}" alt="">`;
+  const it = { el, ev, slot, gone: false };
+  el.addEventListener("pointerdown", e => { e.preventDefault(); tapEvidence(it); });
+  I.items.push(it);
+  $("room").appendChild(el);
+}
+function tapEvidence(it) {
+  if (it.gone || it.el.classList.contains("spotted")) return;
+  if (I.phase === "looking") {
+    I.writeups++; inspectFoot();
+    it.el.classList.add("spotted");
+    later(() => removeItem(it), 500);
+    return roomToast("Caught red-clawed! Confiscated.", true);
+  }
+  removeItem(it);
+  if (!it.ev.decoy) return roomToast(it.ev.hide);
+  if (it.ev.decoy === "microscope") {
+    roomToast("You hid the approved microscope. Now the lab looks suspicious!", true);
+    turnEarly();
+  } else if (it.ev.decoy === "foam") {
+    roomToast("Foam everywhere! Wait for it to clear.", true);
+    foamRoom();
+  } else {
+    roomToast("You woke the intern. The intern panicked and knocked two things over.", true);
+    spawnEvidence(true); spawnEvidence(true);
+  }
+}
+function removeItem(it) {
+  it.gone = true;
+  it.el.classList.add("gone");
+  setTimeout(() => it.el.remove(), 300);
+}
+function roomToast(text, bad) {
+  let t = $("roomToast");
+  if (!t) { t = document.createElement("div"); t.id = "roomToast"; $("room").appendChild(t); }
+  t.className = "room-toast" + (bad ? " bad" : "");
+  t.textContent = text;
+}
+function endInspection() {
+  I.timers.forEach(clearTimeout);
+  $("inspect").hidden = true;
+  const w = I.writeups;
+  let head, text, reward;
+  if (w === 0) {
+    head = "Spotless!";
+    text = "Inspector Grouper found nothing. Suspicious, but nothing.";
+    reward = fullMarks();
+  } else if (w <= 2) {
+    head = "A stern warning";
+    text = `Inspector Grouper wrote you up ${w === 1 ? "once" : "twice"}, then confiscated a krill puff "for evidence".`;
+    reward = "No harm done";
+  } else {
+    head = "Written up!";
+    text = `Inspector Grouper wrote you up ${w} times and confiscated one of your safety flasks.`;
+    S.lives--;
+    reward = "-1 safety flask";
+  }
+  showResult(GROUPER, head, text, reward, `Inspector Grouper wrote the lab up ${w} times.`);
+}
+
+// ---- Shared minigame ending ----
+// A perfect run gives back a flask, or 2 grants when the flasks are already full.
+function fullMarks() {
+  if (S.lives < 3) { S.lives++; return "+1 safety flask"; }
+  S.score += 2; return "Flasks already full: +2 grants";
+}
+function showResult(img, head, text, reward, why) {
+  renderHud();
+  S.lostTo = why;
+  $("doneGrouper").src = img;
+  $("doneGrouper").style.height = img === GROUPER ? "108px" : "144px";
+  $("doneHead").textContent = head;
+  $("doneText").textContent = text;
+  $("doneReward").textContent = reward;
+  $("inspectDone").hidden = false;
+  $("btnBackToWork").focus();
+}
+function backToWork() {
+  $("inspectDone").hidden = true;
+  if (S.test) { $("title").hidden = false; return; }
+  if (S.lives <= 0) return gameOver(S.lostTo);
+  afterCard();
+}
+
+// ---- Fizz Containment minigame ----
+const FIZZ_SECONDS = 15, FIZZ_MAX_ESCAPES = 5;
+// Pixel bubbles, drawn as circles on a small grid so they match the chunky sprites (a bit finer than the flask).
+function pixelBubble(n, fill, rim, dark, opts = {}) {
+  const c = document.createElement("canvas");
+  c.width = c.height = n;
+  const x = c.getContext("2d"), mid = (n - 1) / 2, r = n / 2 - .3;
+  const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const d = Math.hypot(i - mid, j - mid);
+    if (d > r) continue;
+    if (d > r - 1.1) px(i, j, i + j < n - 1 ? rim : dark);
+    else if (opts.ring) { if (d > r - 2.1) px(i, j, fill); }
+    else px(i, j, fill);
+  }
+  // Shine: a little white blob up and to the left, plus one sparkle pixel.
+  const sx = Math.round(mid - r * .45), sy = Math.round(mid - r * .45);
+  px(sx, sy, "#fff"); px(sx + 1, sy, "#fff"); px(sx, sy + 1, "#fff");
+  if (n > 14) px(sx + 1, sy + 1, "rgba(255,255,255,.7)");
+  px(Math.round(mid + r * .4), Math.round(mid + r * .5), "rgba(255,255,255,.6)");
+  if (opts.crack) {
+    let i = Math.round(mid + 1);
+    for (let j = 2; j < n * .7; j++) { px(i, j, "#1e141c"); if (j % 2) i += j % 4 === 1 ? -1 : 1; }
+    px(i + 1, Math.floor(n * .7), "#1e141c"); px(i + 2, Math.floor(n * .7) + 1, "#1e141c");
+  }
+  return c.toDataURL();
+}
+function pixelPop(n, col) {
+  const c = document.createElement("canvas");
+  c.width = c.height = n;
+  const x = c.getContext("2d"), mid = (n - 1) / 2;
+  x.fillStyle = col;
+  for (let k = 0; k < 8; k++) {
+    const a = k * Math.PI / 4, i = Math.round(mid + Math.cos(a) * n * .38), j = Math.round(mid + Math.sin(a) * n * .38);
+    x.fillRect(i, j, 2, 2);
+    x.fillRect(Math.round(mid + Math.cos(a) * n * .22), Math.round(mid + Math.sin(a) * n * .22), 1, 1);
+  }
+  return c.toDataURL();
+}
+const BUBBLE_IMG = {
+  small: pixelBubble(14, "rgba(163,91,214,.55)", "#e2b8ff", "#7a3fb0"),
+  big: pixelBubble(18, "rgba(110,200,255,.45)", "#cfe8f0", "#4a6a9a"),
+  cracked: pixelBubble(18, "rgba(110,200,255,.6)", "#ffffff", "#4a6a9a", { crack: true }),
+  crab: pixelBubble(20, "rgba(255,255,255,.18)", "#ffffff", "#9aa6ad", { ring: true }),
+  popSmall: pixelPop(14, "#e2b8ff"),
+  popBig: pixelPop(18, "#cfe8f0"),
+};
+const FIZZ_LINES = ["\"It's fine! It's totally fine!\"", "\"That one was a practice bubble.\"", "\"Okay. Slightly less fine.\"", "\"Nobody panic. I'm panicking.\"", "\"ONE MORE AND WE LOSE THE CEILING.\""];
+let F = null;
+
+function runFizz() {
+  $("fizzIntroImg").src = IMG.fizz;
+  $("fizzIntroCrab").src = LAB_CRAB;
+  $("fizzIntro").hidden = false;
+  $("btnFizz").focus();
+}
+function beginFizz() {
+  $("fizzIntro").hidden = true;
+  $("fizz").hidden = false;
+  $("fizzImg").src = IMG.fizz;
+  $("fizzRoom").innerHTML = `<img class="pix flask" src="${EVIDENCE[3].img}" alt="">`;
+  $("fizzRoom").classList.remove("boom");
+  F = { t: 0, last: performance.now(), nextSpawn: 0, bubbles: [], escaped: 0, popped: 0, crabAt: 5 + Math.random() * 4, crab: null, crabSaved: false, over: false };
+  fizzHud();
+  F.raf = requestAnimationFrame(fizzTick);
+}
+function fizzHud() {
+  $("fizzLine").textContent = FIZZ_LINES[Math.min(F.escaped, FIZZ_LINES.length - 1)];
+  $("fizzTime").textContent = `${Math.max(0, Math.ceil(FIZZ_SECONDS - F.t))}s left`;
+  $("fizzEscaped").innerHTML = "Escaped " + [...Array(FIZZ_MAX_ESCAPES)].map((_, i) => `<i class="${i < F.escaped ? "on" : ""}"></i>`).join("");
+}
+function fizzToast(text, bad) {
+  let t = $("fizzToast");
+  if (!t) { t = document.createElement("div"); t.id = "fizzToast"; $("fizzRoom").appendChild(t); }
+  t.className = "room-toast" + (bad ? " bad" : "");
+  t.textContent = text;
+}
+// Bubbles rise from the flask and sway. Later bubbles come faster and quicker.
+function spawnBubble(kind) {
+  const room = $("fizzRoom"), W = room.clientWidth, H = room.clientHeight;
+  const size = kind === "crab" ? 84 : kind === "big" ? 78 : 56;
+  const progress = F.t / FIZZ_SECONDS;
+  const b = {
+    kind, size, hp: kind === "big" ? 2 : 1,
+    baseX: W / 2 + (Math.random() - .5) * (W - size - 24), x: 0,
+    y: H - 70, sway: 10 + Math.random() * 14, phase: Math.random() * 6,
+    vy: H / ((kind === "crab" ? 4.2 : 3.4) - progress * 1.4),
+  };
+  b.baseX = Math.max(size / 2 + 6, Math.min(W - size / 2 - 6, b.baseX));
+  b.el = document.createElement("button");
+  b.el.className = "bubble" + (kind === "big" ? " big" : "") + (kind === "crab" ? " crab" : "");
+  b.el.style.width = b.el.style.height = size + "px";
+  b.el.style.backgroundImage = `url(${BUBBLE_IMG[kind]})`;
+  b.el.setAttribute("aria-label", kind === "crab" ? "Lab Crab in a bubble" : "Bubble");
+  if (kind === "crab") b.el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="">`;
+  b.el.addEventListener("pointerdown", e => { e.preventDefault(); popBubble(b); });
+  room.appendChild(b.el);
+  F.bubbles.push(b);
+  if (kind === "crab") F.crab = b;
+}
+function popBubble(b) {
+  if (F.over || b.gone) return;
+  if (--b.hp > 0) { b.el.style.backgroundImage = `url(${BUBBLE_IMG.cracked})`; return; }
+  b.gone = true;
+  F.popped++;
+  if (b.kind === "crab") {
+    F.crabSaved = true;
+    b.el.classList.add("crab-drop");
+    fizzToast("Lab Crab rescued! He salutes with one claw.");
+  } else {
+    b.el.style.backgroundImage = `url(${b.kind === "big" ? BUBBLE_IMG.popBig : BUBBLE_IMG.popSmall})`;
+    b.el.classList.add("pop");
+  }
+  setTimeout(() => b.el.remove(), b.kind === "crab" ? 900 : 200);
+}
+function fizzTick(now) {
+  if (F.over) return;
+  const dt = Math.min(.05, (now - F.last) / 1000);
+  F.last = now;
+  F.t += dt;
+  if (F.t >= FIZZ_SECONDS) return endFizz();
+  if (!F.crab && F.t >= F.crabAt) spawnBubble("crab");
+  if (F.t >= F.nextSpawn) {
+    spawnBubble(Math.random() < .2 ? "big" : "small");
+    F.nextSpawn = F.t + .75 - (F.t / FIZZ_SECONDS) * .4;
+  }
+  for (const b of F.bubbles) {
+    if (b.gone) continue;
+    b.y -= b.vy * dt;
+    b.x = b.baseX + Math.sin(F.t * 2.4 + b.phase) * b.sway;
+    b.el.style.transform = `translate(${b.x - b.size / 2}px, ${b.y - b.size / 2}px)`;
+    if (b.y + b.size / 2 < 0) {
+      b.gone = true; b.el.remove();
+      if (b.kind === "crab") { fizzToast("Lab Crab floated away. He'll be back. He always comes back."); continue; }
+      F.escaped++;
+      fizzHud();
+      if (F.escaped >= FIZZ_MAX_ESCAPES) return boomFizz();
+      fizzToast("A bubble got out! The ceiling creaks.", true);
+    }
+  }
+  fizzHud();
+  F.raf = requestAnimationFrame(fizzTick);
+}
+function boomFizz() {
+  F.over = true;
+  $("fizzRoom").classList.add("boom");
+  $("fizzLine").textContent = "\"...oops.\"";
+  setTimeout(endFizz, 900);
+}
+function endFizz() {
+  F.over = true;
+  cancelAnimationFrame(F.raf);
+  $("fizz").hidden = true;
+  const e = F.escaped;
+  let head, text, reward;
+  if (e >= FIZZ_MAX_ESCAPES) {
+    head = "BOOM.";
+    text = "Five bubbles reached the ceiling and took it with them. Prof. Fizz says it was a learning experience.";
+    reward = "No flask this time";
+  } else if (e === 0) {
+    head = "Contained!";
+    text = `Every single bubble popped. Prof. Fizz is already planning a bigger reaction.`;
+    reward = fullMarks();
+  } else {
+    head = "Mostly contained";
+    text = `${e} bubble${e === 1 ? "" : "s"} got out. The lab smells purple now. Nobody can explain it.`;
+    reward = "No harm done";
+  }
+  if (F.crabSaved) { S.score++; reward += ". Lab Crab bonus: +1 grant"; }
+  showResult(IMG.fizz, head, text, reward, "Prof. Fizz's reaction blew the ceiling off.");
+}
+
+// ---- Shrimp Stacking minigame ----
+// The scientists stand on each other's shoulders inside one long lab coat to pass as a tall professor. A shrimp
+// swings along the top; tap to drop it. It lands if it's over the one below, and the tower topples if the weight
+// above any shrimp sits too far off its shoulders. Landed shrimp disappear into the coat with only their heads
+// poking out; the top one sticks out of the collar.
+const STACK_GOAL = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
+const STACK_SHORT = { scampi: "Scampi", specs: "Specsworth", fizz: "Fizz" };
+// Head crops from each 34x34 sprite (art pixels). faces: which way the head points, 1 = right, -1 = left.
+const STACK_HEADS = {
+  specs:  { x: 20, y: 2, w: 11, h: 18, faces: 1 },
+  fizz:   { x: 4,  y: 1, w: 12, h: 14, faces: -1 },
+  scampi: { x: 1,  y: 4, w: 12, h: 15, faces: -1 },
+};
+const COAT_W = 22; // art pixels
+const STACK_PERFECT = ["\"Perfect posture!\"", "\"Textbook shoulders.\"", "\"The judges are nodding.\"", "\"Tall. Very tall. Extremely professor.\""];
+const STACK_OK = ["\"Bit wonky. Own it.\"", "\"Lean less.\"", "\"Act tall.\"", "\"Somebody's elbow is in my ear.\""];
+const STACK_WOBBLY = ["\"Nobody move. Nobody breathe.\"", "\"Why is the professor leaning?\"", "\"I can see the floor getting closer.\""];
+let K = null;
+const kLater = (fn, ms) => K.timers.push(setTimeout(fn, ms));
+
+// One section of the long lab coat, in the same whites and greys as the coats in the prawn art. Each section bulges
+// where its shrimp is and pinches in at the joins, with its own lumps (lump.l / lump.r: how far each side bulges,
+// lump.c: how high the bulge sits). The tile is wider than the coat body to leave room for the bulges.
+// Top section: rounded shoulders and a collar with a V-neck showing shrimp inside.
+// Bottom section: flared hem, back vent and the pocket Lab Crab lives in.
+const TILE_W = 30, TILE_OFF = 4;
+const coatTiles = new Map();
+const lumpAt = (lump, size, t) => {
+  const u = (t - lump.c) / (t < lump.c ? lump.c : 1 - lump.c);
+  return Math.round(size * Math.max(0, 1 - u * u));
+};
+function coatTile(h, collar, hem, lump) {
+  const key = [h, collar, hem, lump.l, lump.r, lump.c].join();
+  if (coatTiles.has(key)) return coatTiles.get(key);
+  const c = document.createElement("canvas");
+  c.width = TILE_W; c.height = h;
+  const x = c.getContext("2d"), O = TILE_OFF, CW = COAT_W;
+  const px = (i, j, col, w = 1, hh = 1) => { if (w > 0) { x.fillStyle = col; x.fillRect(i, j, w, hh); } };
+  const flare = j => !hem ? 0 : j >= h - 2 ? 2 : j >= h - 4 ? 1 : 0;
+  const shoulder = j => collar ? [3, 2, 1, 1][j] || 0 : 0;
+  const L = [], R = [];
+  for (let j = 0; j < h; j++) {
+    const t = (j + .5) / h;
+    L[j] = O - Math.max(lumpAt(lump, lump.l, t), flare(j)) + shoulder(j);
+    R[j] = O + CW - 1 + Math.max(lumpAt(lump, lump.r, t), flare(j)) - shoulder(j);
+    px(L[j], j, "#fafaf5", R[j] - L[j] + 1);
+    px(R[j] - 5, j, "#c4cad4", 3); px(R[j] - 2, j, "#acb2c0", 2);   // shadow down the right side
+  }
+  // Outline, joined up where the edge steps in or out by more than a pixel.
+  for (let j = 0; j < h; j++) {
+    px(L[j], j, "#78829e"); px(R[j], j, "#78829e");
+    if (j && L[j] < L[j - 1] - 1) px(L[j], j, "#78829e", L[j - 1] - L[j]);
+    if (j && L[j] > L[j - 1] + 1) px(L[j - 1], j - 1, "#78829e", L[j] - L[j - 1]);
+    if (j && R[j] > R[j - 1] + 1) px(R[j - 1] + 1, j, "#78829e", R[j] - R[j - 1]);
+    if (j && R[j] < R[j - 1] - 1) px(R[j] + 1, j - 1, "#78829e", R[j - 1] - R[j]);
+  }
+  if (!collar) { px(L[0] + 1, 0, "#c4cad4", 2); px(R[0] - 2, 0, "#acb2c0", 2); }    // little creases at the join
+  if (hem) {
+    px(L[h - 1], h - 1, "#78829e", R[h - 1] - L[h - 1] + 1);
+    px(O + 11, h - 6, "#78829e", 1, 6);                                            // back vent
+    px(O + 3, h - 12, "#78829e", 6, 1);                                            // pocket
+    px(O + 3, h - 11, "#c4cad4", 1, 5); px(O + 8, h - 11, "#c4cad4", 1, 5); px(O + 3, h - 6, "#c4cad4", 6, 1);
+  }
+  px(O + 10, collar ? 5 : 0, "#c4cad4", 1, h - (hem ? 6 : 0) - (collar ? 5 : 0));     // front edge
+  for (let j = collar ? 9 : 4; j < h - (hem ? 6 : 0); j += 8) px(O + 11, j, "#78829e"); // buttons
+  if (collar) {
+    px(L[0], 0, "#78829e", O + 6 - L[0]); px(O + 16, 0, "#78829e", R[0] - O - 15);   // shoulders
+    for (let j = 0; j < 5; j++) {
+      px(O + 6 + j, j, "#78829e"); px(O + 15 - j, j, "#78829e");                   // lapels
+      if (j < 4) px(O + 7 + j, j, "#be342e", 8 - 2 * j);                           // shrimp showing in the V
+      px(O + 5 + j, j + 1, "#c4cad4");
+    }
+  }
+  const url = c.toDataURL();
+  coatTiles.set(key, url);
+  return url;
+}
+
+function runStack() {
+  $("stackIntroImg").src = IMG.scampi;
+  $("stackIntroCrab").src = LAB_CRAB;
+  $("stackIntro").hidden = false;
+  $("btnStack").focus();
+}
+function beginStack() {
+  $("stackIntro").hidden = true;
+  $("stack").hidden = false;
+  $("stackImg").src = IMG.scampi;
+  const room = $("stackRoom"), W = room.clientWidth, H = room.clientHeight;
+  const S = Math.round(Math.min(76, W * .2, (H - 60) / 5.5)), step = Math.round(S * .7), baseY = H - 34, k = S / 34;
+  room.style.setProperty("--s", S + "px");
+  room.innerHTML = `<div class="award" style="top:${baseY - S - (STACK_GOAL - 1) * step}px">AWARD HEIGHT</div>` +
+    `<div class="podium">PODIUM</div><div class="tower" id="tower" style="transform-origin:${W / 2}px ${baseY}px"></div>`;
+  K = { W, H, S, step, baseY, k, coatW: COAT_W * k, stack: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
+        lean: 0, t: 0, last: performance.now(), over: false, timers: [] };
+  $("stackLine").textContent = "\"Stand up straight. The judges are watching.\"";
+  stackHud();
+  newCarrier();
+  K.raf = requestAnimationFrame(stackTick);
+}
+function stackHud() {
+  $("stackHeight").textContent = `Height ${K.stack.length} of ${STACK_GOAL}`;
+  $("stackDrops").innerHTML = "Fell off " + [...Array(STACK_DROPS)].map((_, i) => `<i class="${i < K.drops ? "on" : ""}"></i>`).join("");
+}
+function stackToast(text, bad) {
+  let t = $("stackToast");
+  if (!t) { t = document.createElement("div"); t.id = "stackToast"; $("stackRoom").appendChild(t); }
+  t.className = "room-toast" + (bad ? " bad" : "");
+  t.textContent = text;
+}
+const topY = n => K.baseY - K.S - n * K.step;
+const coatTop = i => K.baseY - (i + 1) * K.step;
+const placeAt = (el, x, y, rot) => el.style.transform = `translate(${x - el.offsetWidth / 2}px, ${y}px)` + (rot ? ` rotate(${rot}deg)` : "");
+// Where the top head's crown is, so Lab Crab can sit on it.
+const headCrown = () => { const n = K.stack.length, top = K.stack[n - 1]; return coatTop(n - 1) - (STACK_HEADS[top.who].h - 3) * K.k; };
+
+function newCarrier() {
+  if (K.over) return;
+  const who = STACK_ORDER[K.next++ % STACK_ORDER.length];
+  const el = document.createElement("img");
+  el.className = "pix stack-shrimp"; el.src = IMG[who]; el.alt = SCI[who].name;
+  $("stackRoom").appendChild(el);
+  K.carrier = { who, el, x: K.W / 2, y: 6, vy: 0, phase: Math.random() * 6, miss: false };
+  K.state = "aim";
+}
+function dropStack() {
+  if (K && !K.over && K.state === "aim" && K.carrier) K.state = "fall";
+}
+// How far the weight above each shrimp (and above the podium) sits off-centre, as a share of what it can take.
+function stackLean() {
+  let worst = 0, signed = 0;
+  for (let k = -1; k < K.stack.length - 1; k++) {
+    const above = K.stack.slice(k + 1), com = above.reduce((a, b) => a + b.x, 0) / above.length;
+    const r = (com - (k < 0 ? K.W / 2 : K.stack[k].x)) / (k < 0 ? K.W * .23 : K.S * .48);
+    if (Math.abs(r) > worst) { worst = Math.abs(r); signed = r; }
+  }
+  return { worst, signed };
+}
+
+// Each landed shrimp is a coat section plus a head. Lower heads poke out of the side they face; the top one
+// sticks out of the collar. Specsworth faces the other way from the others, so he peeks out either side.
+function addToCoat(s) {
+  const H = STACK_HEADS[s.who], k = K.k;
+  s.head = document.createElement("div");
+  s.head.className = "stack-head";
+  s.head.innerHTML = `<i style="background-image:url(${IMG[s.who]});background-size:${34 * k}px ${34 * k}px;background-position:${-H.x * k}px ${-H.y * k}px"></i>`;
+  s.head.style.width = H.w * k + "px"; s.head.style.height = H.h * k + "px";
+  s.coat = document.createElement("div");
+  s.coat.className = "coat";
+  s.coat.style.width = TILE_W * K.k + "px"; s.coat.style.height = K.step + 1 + "px";
+  s.side = H.faces; s.out = true; s.peekT = 1 + Math.random() * 2;
+  s.lump = { l: 1 + Math.floor(Math.random() * 3), r: 1 + Math.floor(Math.random() * 3), c: +(.35 + Math.random() * .3).toFixed(2) };
+  $("tower").append(s.head, s.coat);
+}
+function layoutCoat() {
+  const n = K.stack.length, k = K.k, tileH = Math.round(K.step / k);
+  K.stack.forEach((s, i) => {
+    s.coat.style.backgroundImage = `url(${coatTile(tileH, i === n - 1, i === 0, s.lump)})`;
+    s.coat.style.left = s.x - TILE_W * K.k / 2 + "px";
+    s.coat.style.top = coatTop(i) + "px";
+    placeHead(s, i);
+  });
+}
+function placeHead(s, i) {
+  const H = STACK_HEADS[s.who], k = K.k, w = H.w * k, h = H.h * k, top = i === K.stack.length - 1;
+  s.head.classList.toggle("flip", s.side !== H.faces);
+  if (top) {
+    s.head.style.left = s.x - w / 2 + s.side * w * .2 + "px";
+    s.head.style.top = coatTop(i) - h + 3 * k + "px";
+  } else {
+    const bulge = lumpAt(s.lump, s.side > 0 ? s.lump.r : s.lump.l, .5) * k;
+    s.head.style.left = (s.side > 0 ? s.x + K.coatW / 2 + bulge - 3 * k : s.x - K.coatW / 2 - bulge + 3 * k - w) + "px";
+    s.head.style.top = coatTop(i) + K.step / 2 - h / 2 + "px";
+  }
+  s.head.hidden = !top && !s.out;
+}
+function specsPeek(dt) {
+  K.stack.forEach((s, i) => {
+    if (s.who !== "specs" || (s.peekT -= dt) > 0) return;
+    const top = i === K.stack.length - 1;
+    if (top) { s.side = -s.side; s.out = true; s.peekT = 1.2 + Math.random() * 2; }           // on top he just turns
+    else if (s.out) { s.out = false; s.peekT = .5 + Math.random() * .8; }                       // ducks in
+    else { s.out = true; s.side = Math.random() < .5 ? -1 : 1; s.peekT = 1.2 + Math.random() * 1.8; } // pops out a side
+    placeHead(s, i);
+    if (s.out) { s.head.classList.remove("peek"); void s.head.offsetWidth; s.head.classList.add("peek"); }
+  });
+}
+
+function landShrimp() {
+  const c = K.carrier, n = K.stack.length;
+  const sx = n ? K.stack[n - 1].x : K.W / 2, dx = c.x - sx;
+  if (Math.abs(dx) > (n ? K.S * .55 : K.W * .23)) {
+    c.miss = true; c.dir = Math.sign(dx) || 1;
+    K.drops++; stackHud();
+    $("stackLine").textContent = `"${STACK_SHORT[c.who]} fell off. Back of the queue."`;
+    return;
+  }
+  const perfect = Math.abs(dx) < K.S * .07;
+  if (perfect) c.x = sx;
+  let pinched = false;
+  if (K.crab && K.crab.phase === "top") {
+    pinched = true;
+    c.x += (Math.random() < .5 ? -1 : 1) * K.S * .3;
+    crabLeaves(true);
+    stackToast(`OW! Lab Crab pinched ${STACK_SHORT[c.who]}. The whole professor wobbles.`, true);
+  }
+  c.el.remove();
+  const s = { x: c.x, who: c.who };
+  K.stack.push(s);
+  addToCoat(s);
+  layoutCoat();
+  K.carrier = null; K.state = "wait";
+  const lean = stackLean();
+  K.lean = lean.signed;
+  stackHud();
+  if (lean.worst > 1) return toppleStack();
+  $("stackLine").textContent = lean.worst > .65 ? deal(STACK_WOBBLY) : perfect && !pinched ? deal(STACK_PERFECT) : deal(STACK_OK);
+  if (K.stack.length >= STACK_GOAL) return winStack();
+  // Lab Crab comes out at least once from the third shrimp up, at most twice a game.
+  if (!K.crab && K.stack.length >= 2 && K.crabSeen < 2 && (Math.random() < .4 || (K.crabSeen === 0 && K.stack.length >= 3))) kLater(crabArrives, 250);
+  kLater(newCarrier, 450);
+}
+
+// Lab Crab lives in the coat pocket. He peeks out, climbs the front of the coat, then sits on the top head.
+// He's only in the way once he's up there.
+function crabArrives() {
+  if (K.over || !K.stack.length) return;
+  const el = document.createElement("div");
+  el.className = "stack-crab";
+  el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="Lab Crab">`;
+  $("tower").appendChild(el);
+  K.crab = { el, phase: "pocket", t: 0, y: K.baseY - 12 * K.k - K.S * .45 * .55 };
+  K.crabSeen++;
+  stackToast("Lab Crab crawled out of the coat pocket. He's climbing up!", true);
+}
+function crabTick(dt) {
+  const cr = K.crab;
+  if (!cr || cr.phase === "gone") return;
+  cr.t += dt;
+  const C = K.S * .45, crown = headCrown() - C * .75;
+  let x;
+  if (cr.phase === "pocket") {
+    x = K.stack[0].x - K.coatW / 2 + 6 * K.k;  // in the pocket
+    if (cr.t > .7) { cr.phase = "climb"; cr.t = 0; }
+  } else if (cr.phase === "climb") {
+    cr.y = Math.max(crown, cr.y - 85 * dt);
+    const i = Math.max(0, Math.min(K.stack.length - 1, Math.floor((K.baseY - cr.y - C / 2) / K.step)));
+    x = K.stack[i].x - K.coatW * .12;
+    if (cr.y <= crown) { cr.phase = "top"; cr.t = 0; stackToast("Lab Crab is on the professor's head! Wait for him to leave.", true); }
+  } else {
+    cr.y = crown;
+    x = K.stack[K.stack.length - 1].x + Math.sin(cr.t * 3) * K.S * .25;
+    if (cr.t > 2.6) return crabLeaves(false);
+  }
+  placeAt(cr.el, x, cr.y);
+}
+function crabLeaves(pinched) {
+  const cr = K.crab;
+  cr.phase = "gone";
+  cr.el.classList.add("leave");
+  if (!pinched) stackToast("Lab Crab got bored and climbed down.");
+  kLater(() => { cr.el.remove(); if (K.crab === cr) K.crab = null; }, 900);
+}
+
+function stackTick(now) {
+  if (K.over) return;
+  const dt = Math.min(.05, (now - K.last) / 1000);
+  K.last = now;
+  K.t += dt;
+  const c = K.carrier;
+  if (c && K.state === "aim") {
+    c.phase += (2 + K.stack.length * .3) * dt;
+    c.x = K.W / 2 + Math.sin(c.phase) * ((K.W - K.S) / 2 - 4);
+    placeAt(c.el, c.x, c.y);
+  } else if (c && K.state === "fall") {
+    c.vy += 2600 * dt;
+    c.y += c.vy * dt;
+    if (c.miss) {
+      c.x += c.dir * 140 * dt;
+      placeAt(c.el, c.x, c.y, c.dir * (c.y - topY(K.stack.length)) * .8);
+      if (c.y > K.H + 20) {
+        c.el.remove(); K.carrier = null; K.state = "wait";
+        if (K.drops >= STACK_DROPS) { K.over = true; return kLater(() => endStack("drops"), 500); }
+        kLater(newCarrier, 300);
+      }
+    } else if (c.y >= topY(K.stack.length)) {
+      c.y = topY(K.stack.length);
+      landShrimp();
+      if (K.over) return;
+    } else placeAt(c.el, c.x, c.y);
+  }
+  specsPeek(dt);
+  crabTick(dt);
+  $("tower").style.transform = `rotate(${(K.lean * 4 + Math.sin(K.t * 2.6) * Math.abs(K.lean) * 2.5).toFixed(2)}deg)`;
+  K.raf = requestAnimationFrame(stackTick);
+}
+function toppleStack() {
+  K.over = true;
+  const tower = $("tower");
+  tower.classList.add("timber");
+  tower.style.transform = `rotate(${(Math.sign(K.lean) || 1) * 85}deg)`;
+  $("stackLine").textContent = "\"TIMBER!\"";
+  kLater(() => endStack("topple"), 1300);
+}
+function winStack() {
+  K.over = true;
+  $("stackLine").textContent = "\"Ahem. Professor Tallshrimp, here for the award.\"";
+  kLater(() => endStack("win"), 1100);
+}
+function endStack(how) {
+  K.over = true;
+  cancelAnimationFrame(K.raf);
+  K.timers.forEach(clearTimeout);
+  $("stack").hidden = true;
+  const h = K.stack.length;
+  let head, text, reward;
+  if (how === "win") {
+    head = "Award accepted!";
+    text = "Six shrimp, one lab coat. The judges counted two of everyone and said nothing. The Golden Clipboard is ours.";
+    reward = fullMarks();
+  } else {
+    head = how === "topple" ? "TIMBER!" : "Too many falls";
+    text = how === "topple"
+      ? "The professor fell over in front of the judges. They gave the award to a sponge."
+      : "Three scientists fell off the tower. The judges assumed it was interpretive dance.";
+    if (h >= 4) { S.score++; reward = "Honourable mention: +1 grant"; } else reward = "No award this time";
+  }
+  showResult(IMG.scampi, head, text, reward, "");
+}
+
+function gameOver(why) {
+  const best = Math.max(S.score, +(store.get("prawnReviewBest") || 0));
+  store.set("prawnReviewBest", best);
+  const rank = RANKS.filter(r => S.score >= r[0]).pop()[1];
+  $("overWhy").textContent = `The Department of Fisheries has closed your lab. Last straw: ${why}`;
+  $("overScore").textContent = S.score;
+  $("overRank").textContent = rank;
+  $("overBest").textContent = `Best: ${best}`;
+  $("overShrimp").src = pick(Object.values(IMG));
+  $("over").hidden = false;
+  $("btnAgain").focus();
+}
+
+function start() {
+  S = newState();
+  ["title", "over", "memoScreen", "inspectIntro", "inspect", "inspectDone", "fizzIntro", "fizz", "stackIntro", "stack"].forEach(id => $(id).hidden = true);
+  renderHud(); renderMemos();
+  // First rule arrives straight away so there's something to judge.
+  newMemo();
+}
+
+function bindSwipe(card) {
+  let x0 = null, dx = 0;
+  card.addEventListener("pointerdown", e => { if (busy) return; x0 = e.clientX; dx = 0; card.setPointerCapture(e.pointerId); card.style.transition = "none"; });
+  card.addEventListener("pointermove", e => {
+    if (x0 === null) return;
+    dx = e.clientX - x0;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    $("stFund").style.opacity = Math.max(0, dx / 120);
+    $("stReject").style.opacity = Math.max(0, -dx / 120);
+  });
+  const end = () => {
+    if (x0 === null) return;
+    x0 = null;
+    if (Math.abs(dx) > 90) return decide(dx > 0);
+    card.style.transition = "transform .2s";
+    card.style.transform = "";
+    $("stFund").style.opacity = 0; $("stReject").style.opacity = 0;
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
+}
+
+$("btnYes").onclick = () => S && !busy && $("card") && decide(true);
+$("btnNo").onclick = () => S && !busy && $("card") && decide(false);
+$("btnStart").onclick = start;
+$("btnAgain").onclick = start;
+$("btnMemo").onclick = () => { $("memoScreen").hidden = true; showCard(); };
+$("btnInspect").onclick = beginInspection;
+$("btnBackToWork").onclick = backToWork;
+$("btnFizz").onclick = beginFizz;
+$("btnStack").onclick = beginStack;
+$("stackRoom").addEventListener("pointerdown", e => { e.preventDefault(); dropStack(); });
+// Minigames take turns, one every 15 points.
+const MINIGAMES = [runInspection, runFizz, runStack];
+// Lab Crab wanders: walk somewhere, stop for a bit (sometimes a long while), now and then a hop.
+function scuttle(c) {
+  const SPEED = .27; // screen widths per second
+  const hop = () => { c.classList.remove("hop"); void c.offsetWidth; c.classList.add("hop"); };
+  let x = .04, target = x, wait = 1.5, last = performance.now();
+  const pause = () => {
+    const r = Math.random();
+    wait = r < .2 ? 4 + Math.random() * 4 : r < .55 ? 1.5 + Math.random() * 2 : .5 + Math.random();
+    if (Math.random() < .3) setTimeout(hop, 200 + Math.random() * wait * 600);
+  };
+  const tick = now => {
+    const dt = Math.min(.1, (now - last) / 1000);
+    last = now;
+    if (wait > 0) {
+      wait -= dt;
+      c.classList.remove("walking");
+      if (wait <= 0) do target = .02 + Math.random() * .96; while (Math.abs(target - x) < .15);
+    } else {
+      c.classList.add("walking");
+      const d = target - x, move = SPEED * dt;
+      if (Math.abs(d) <= move) { x = target; pause(); }
+      else x += Math.sign(d) * move;
+      if (Math.random() < dt * .04) hop();
+    }
+    c.style.left = `calc((100% - 42px) * ${x.toFixed(4)})`;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+// Lab Crab on the title and game-over screens: tap him to show or hide the minigame list.
+document.querySelectorAll(".crab-walk").forEach(c => {
+  c.querySelector("img").src = LAB_CRAB;
+  c.addEventListener("animationend", e => e.animationName === "crabhop" && c.classList.remove("hop"));
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) scuttle(c);
+  c.onclick = () => {
+    const list = c.closest(".screen").querySelector(".crab-list");
+    list.hidden = !list.hidden;
+    c.classList.remove("hop"); void c.offsetWidth; c.classList.add("hop");
+    if (!list.hidden) list.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+});
+// Minigame list: jump straight into a minigame with a fresh lab, then return to the title.
+const TEST_GAMES = { inspection: runInspection, fizz: runFizz, stack: runStack };
+document.querySelectorAll(".testbtn").forEach(b => b.onclick = () => {
+  S = newState(); S.test = true;
+  ["title", "over"].forEach(id => $(id).hidden = true);
+  $("stage").innerHTML = "";
+  renderHud(); renderMemos();
+  TEST_GAMES[b.dataset.game]();
+});
+document.addEventListener("keydown", e => {
+  if (document.querySelector(".screen:not([hidden])")) return;
+  if (e.key === "ArrowRight") $("btnYes").click();
+  if (e.key === "ArrowLeft") $("btnNo").click();
+});
+const best = store.get("prawnReviewBest");
+if (best) $("best").textContent = `Your best: ${best} grants judged`;
+</script>

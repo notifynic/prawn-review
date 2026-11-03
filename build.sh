@@ -11,4 +11,11 @@ sed -e "s|__GLASSES__|data:image/png;base64,$G|g" \
     -e "s|__BEAKER__|data:image/png;base64,$B|g" \
     -e "s|__CLIPBOARD__|data:image/png;base64,$C|g" \
     template.html > index.html
-echo "Built index.html"
+# GitHub Pages copy (served from /docs): a full page with the doctype and phone viewport the artifact host adds itself.
+mkdir -p docs
+{
+  printf '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+  printf '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+  cat index.html
+} > docs/index.html
+echo "Built index.html and docs/index.html"

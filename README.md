@@ -2,19 +2,21 @@
 
 A silly phone game: you chair the grant committee at an underwater lab and swipe to fund or reject proposals from three shrimp scientists, while the committee's rules keep changing.
 
-Live (private artifact): https://claude.ai/artifact/93p5k3QT1VDJf1xgZ6qxZ7
+Play it: https://notifynic.github.io/prawn-review/ (GitHub Pages, from `docs/`)
+Private artifact copy: https://claude.ai/artifact/93p5k3QT1VDJf1xgZ6qxZ7
 
 ## Files
 
 - `template.html` is the game. Edit this one.
 - `index.html` is built from it and is the file that gets published. Don't edit it by hand.
-- `build.sh` builds `index.html`. It swaps `__GLASSES__`, `__BEAKER__` and `__CLIPBOARD__` for the prawn art in `../pixel-editor/art/lab shrimp final/`.
+- `docs/index.html` is the same page as a full standalone file, served by GitHub Pages.
+- `build.sh` builds both. It swaps `__GLASSES__`, `__BEAKER__` and `__CLIPBOARD__` for the prawn art in `../pixel-editor/art/lab shrimp final/`.
 
 ```sh
 sh build.sh
 ```
 
-Then republish `index.html` to the same artifact so the link stays the same.
+Then commit and push (GitHub Pages updates itself a minute or so later), and republish `index.html` to the same artifact so its link stays the same.
 
 ## Minigames
 
