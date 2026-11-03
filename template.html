@@ -279,7 +279,13 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 .tower { position: absolute; inset: 0; pointer-events: none; }
 .tower.timber { transition: transform 1.1s cubic-bezier(.5, 0, 1, .6); }
 .stack-shrimp { position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); pointer-events: none; will-change: transform; }
-.stack-crab { position: absolute; left: 0; top: 0; width: calc(var(--s) * .55); height: calc(var(--s) * .55); }
+.stack-crab { position: absolute; left: 0; top: 0; z-index: 3; width: calc(var(--s) * .45); height: calc(var(--s) * .45); }
+.coat { position: absolute; z-index: 2; background: none 0 0 / 100% 100% no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; }
+.stack-head { position: absolute; z-index: 1; }
+.stack-head i { display: block; width: 100%; height: 100%; background-repeat: no-repeat; image-rendering: pixelated; image-rendering: crisp-edges; }
+.stack-head.flip i { transform: scaleX(-1); }
+.stack-head.peek { animation: headpeek .18s ease-out; }
+@keyframes headpeek { from { scale: .5; opacity: .3; } }
 .stack-crab img { width: 100%; height: 100%; display: block; animation: crabstep .3s steps(2) infinite; }
 .stack-crab.leave { animation: crabdrop .9s ease-in forwards; }
 .room-toast {
@@ -399,10 +405,10 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
   <div class="panel">
     <img class="pix" id="stackIntroImg" alt="" style="width:120px;height:120px">
     <h1>Shrimp Stacking!</h1>
-    <p>The Golden Clipboard goes to the tallest professor in the ocean. The lab doesn't have a tall professor. It has three shrimp and one very big lab coat.</p>
+    <p>The Golden Clipboard goes to the tallest professor in the ocean. The lab doesn't have a tall professor. It has three shrimp and one very long lab coat.</p>
     <p>Tap to drop each scientist onto the one below. Stack six to reach award height. Miss and they fall off. Lean too far and the whole professor topples.</p>
     <div class="legend leave"><span>Watch out</span><div><img class="pix" id="stackIntroCrab" alt=""></div></div>
-    <p class="small">Lab Crab keeps climbing into the tower. Drop a shrimp on him and he pinches, and everything wobbles. Wait for him to leave.</p>
+    <p class="small">Lab Crab lives in the coat pocket. When he climbs up onto the professor's head, wait for him to leave. Drop a shrimp on him and he pinches, and everything wobbles.</p>
     <button class="big" id="btnStack">START STACKING</button>
   </div>
 </div>
@@ -1096,16 +1102,73 @@ function endFizz() {
 }
 
 // ---- Shrimp Stacking minigame ----
-// The scientists stand on each other's shoulders to pass as one tall professor. A shrimp swings along the top;
-// tap to drop it. It lands if it's over the one below, and the tower topples if the weight above any shrimp
-// sits too far off its shoulders.
+// The scientists stand on each other's shoulders inside one long lab coat to pass as a tall professor. A shrimp
+// swings along the top; tap to drop it. It lands if it's over the one below, and the tower topples if the weight
+// above any shrimp sits too far off its shoulders. Landed shrimp disappear into the coat with only their heads
+// poking out; the top one sticks out of the collar.
 const STACK_GOAL = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
 const STACK_SHORT = { scampi: "Scampi", specs: "Specsworth", fizz: "Fizz" };
+// Head crops from each 34x34 sprite (art pixels). faces: which way the head points, 1 = right, -1 = left.
+const STACK_HEADS = {
+  specs:  { x: 20, y: 2, w: 11, h: 18, faces: 1 },
+  fizz:   { x: 4,  y: 1, w: 12, h: 14, faces: -1 },
+  scampi: { x: 1,  y: 4, w: 12, h: 15, faces: -1 },
+};
+const COAT_W = 22; // art pixels
 const STACK_PERFECT = ["\"Perfect posture!\"", "\"Textbook shoulders.\"", "\"The judges are nodding.\"", "\"Tall. Very tall. Extremely professor.\""];
 const STACK_OK = ["\"Bit wonky. Own it.\"", "\"Lean less.\"", "\"Act tall.\"", "\"Somebody's elbow is in my ear.\""];
 const STACK_WOBBLY = ["\"Nobody move. Nobody breathe.\"", "\"Why is the professor leaning?\"", "\"I can see the floor getting closer.\""];
 let K = null;
 const kLater = (fn, ms) => K.timers.push(setTimeout(fn, ms));
+
+// One section of the long lab coat, in the same whites and greys as the coats in the prawn art. The tile is wider
+// than the coat body so the top section can have sleeves and the bottom one a flared hem.
+// Top section: collar with a V-neck showing shrimp inside, sleeves with a claw out of each cuff.
+// Bottom section: flared hem, back vent and the pocket Lab Crab lives in.
+const TILE_W = 30, TILE_OFF = 4;
+const coatTiles = new Map();
+function coatTile(h, collar, hem) {
+  const key = `${h}${collar}${hem}`;
+  if (coatTiles.has(key)) return coatTiles.get(key);
+  const c = document.createElement("canvas");
+  c.width = TILE_W; c.height = h;
+  const x = c.getContext("2d"), O = TILE_OFF, CW = COAT_W;
+  const px = (i, j, col, w = 1, hh = 1) => { x.fillStyle = col; x.fillRect(i, j, w, hh); };
+  const body = (j0, j1, grow = 0) => {
+    const l = O - grow, r = O + CW - 1 + grow;
+    px(l, j0, "#fafaf5", r - l + 1, j1 - j0);
+    px(r - 5, j0, "#c4cad4", 4, j1 - j0); px(r - 2, j0, "#acb2c0", 2, j1 - j0);   // shadow down the right side
+    px(l, j0, "#78829e", 1, j1 - j0); px(r, j0, "#78829e", 1, j1 - j0);           // outline
+  };
+  body(0, h);
+  if (hem) {
+    body(h - 4, h - 2, 1); body(h - 2, h, 2);
+    px(O - 2, h - 1, "#78829e", CW + 4, 1);
+    px(O + 11, h - 6, "#78829e", 1, 6);                                             // back vent
+    px(O + 3, h - 12, "#78829e", 6, 1);                                             // pocket
+    px(O + 3, h - 11, "#c4cad4", 1, 5); px(O + 8, h - 11, "#c4cad4", 1, 5); px(O + 3, h - 6, "#c4cad4", 6, 1);
+  }
+  px(O + 10, 0, "#c4cad4", 1, h - (hem ? 6 : 0));                                   // front edge
+  for (let j = collar ? 9 : 4; j < h - (hem ? 6 : 0); j += 8) px(O + 11, j, "#78829e"); // buttons
+  if (collar) {
+    x.clearRect(O, 0, 1, 1); x.clearRect(O + CW - 1, 0, 1, 1);
+    px(O + 1, 0, "#78829e", 5, 1); px(O + 16, 0, "#78829e", 5, 1); px(O, 1, "#78829e"); px(O + CW - 1, 1, "#78829e");
+    for (let j = 0; j < 5; j++) {
+      px(O + 6 + j, j, "#78829e"); px(O + 15 - j, j, "#78829e");                    // lapels
+      if (j < 4) px(O + 7 + j, j, "#be342e", 8 - 2 * j);                            // shrimp showing in the V
+      px(O + 5 + j, j + 1, "#c4cad4");
+    }
+    for (const [sx, shade] of [[0, "#fafaf5"], [TILE_W - 4, "#c4cad4"]]) {
+      px(sx, 2, "#fafaf5", 4, h - 8); px(sx + (sx ? 2 : 0), 2, shade, 2, h - 8);
+      px(sx, 2, "#78829e", 1, h - 6); px(sx + 3, 2, "#78829e", 1, h - 6); px(sx, 1, "#78829e", 4, 1);
+      px(sx + 1, h - 6, "#c4cad4", 2, 2); px(sx, h - 4, "#78829e", 4, 1);           // cuff
+      px(sx + 1, h - 3, "#ee5c3c", 2, 1); px(sx + 1, h - 2, "#be342e"); px(sx + 2, h - 2, "#ee5c3c"); // claw
+    }
+  }
+  const url = c.toDataURL();
+  coatTiles.set(key, url);
+  return url;
+}
 
 function runStack() {
   $("stackIntroImg").src = IMG.scampi;
@@ -1118,11 +1181,11 @@ function beginStack() {
   $("stack").hidden = false;
   $("stackImg").src = IMG.scampi;
   const room = $("stackRoom"), W = room.clientWidth, H = room.clientHeight;
-  const S = Math.round(Math.min(76, W * .2, (H - 60) / 5.5)), step = Math.round(S * .7), baseY = H - 34;
+  const S = Math.round(Math.min(76, W * .2, (H - 60) / 5.5)), step = Math.round(S * .7), baseY = H - 34, k = S / 34;
   room.style.setProperty("--s", S + "px");
   room.innerHTML = `<div class="award" style="top:${baseY - S - (STACK_GOAL - 1) * step}px">AWARD HEIGHT</div>` +
     `<div class="podium">PODIUM</div><div class="tower" id="tower" style="transform-origin:${W / 2}px ${baseY}px"></div>`;
-  K = { W, H, S, step, baseY, stack: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
+  K = { W, H, S, step, baseY, k, coatW: COAT_W * k, stack: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
         lean: 0, t: 0, last: performance.now(), over: false, timers: [] };
   $("stackLine").textContent = "\"Stand up straight. The judges are watching.\"";
   stackHud();
@@ -1140,7 +1203,11 @@ function stackToast(text, bad) {
   t.textContent = text;
 }
 const topY = n => K.baseY - K.S - n * K.step;
+const coatTop = i => K.baseY - (i + 1) * K.step;
 const placeAt = (el, x, y, rot) => el.style.transform = `translate(${x - el.offsetWidth / 2}px, ${y}px)` + (rot ? ` rotate(${rot}deg)` : "");
+// Where the top head's crown is, so Lab Crab can sit on it.
+const headCrown = () => { const n = K.stack.length, top = K.stack[n - 1]; return coatTop(n - 1) - (STACK_HEADS[top.who].h - 3) * K.k; };
+
 function newCarrier() {
   if (K.over) return;
   const who = STACK_ORDER[K.next++ % STACK_ORDER.length];
@@ -1163,6 +1230,54 @@ function stackLean() {
   }
   return { worst, signed };
 }
+
+// Each landed shrimp is a coat section plus a head. Lower heads poke out of the side they face; the top one
+// sticks out of the collar. Specsworth faces the other way from the others, so he peeks out either side.
+function addToCoat(s) {
+  const H = STACK_HEADS[s.who], k = K.k;
+  s.head = document.createElement("div");
+  s.head.className = "stack-head";
+  s.head.innerHTML = `<i style="background-image:url(${IMG[s.who]});background-size:${34 * k}px ${34 * k}px;background-position:${-H.x * k}px ${-H.y * k}px"></i>`;
+  s.head.style.width = H.w * k + "px"; s.head.style.height = H.h * k + "px";
+  s.coat = document.createElement("div");
+  s.coat.className = "coat";
+  s.coat.style.width = TILE_W * K.k + "px"; s.coat.style.height = K.step + 1 + "px";
+  s.side = H.faces; s.out = true; s.peekT = 1 + Math.random() * 2;
+  $("tower").append(s.head, s.coat);
+}
+function layoutCoat() {
+  const n = K.stack.length, k = K.k, tileH = Math.round(K.step / k);
+  K.stack.forEach((s, i) => {
+    s.coat.style.backgroundImage = `url(${coatTile(tileH, i === n - 1, i === 0)})`;
+    s.coat.style.left = s.x - TILE_W * K.k / 2 + "px";
+    s.coat.style.top = coatTop(i) + "px";
+    placeHead(s, i);
+  });
+}
+function placeHead(s, i) {
+  const H = STACK_HEADS[s.who], k = K.k, w = H.w * k, h = H.h * k, top = i === K.stack.length - 1;
+  s.head.classList.toggle("flip", s.side !== H.faces);
+  if (top) {
+    s.head.style.left = s.x - w / 2 + s.side * w * .2 + "px";
+    s.head.style.top = coatTop(i) - h + 3 * k + "px";
+  } else {
+    s.head.style.left = (s.side > 0 ? s.x + K.coatW / 2 - 3 * k : s.x - K.coatW / 2 + 3 * k - w) + "px";
+    s.head.style.top = coatTop(i) + K.step / 2 - h / 2 + "px";
+  }
+  s.head.hidden = !top && !s.out;
+}
+function specsPeek(dt) {
+  K.stack.forEach((s, i) => {
+    if (s.who !== "specs" || (s.peekT -= dt) > 0) return;
+    const top = i === K.stack.length - 1;
+    if (top) { s.side = -s.side; s.out = true; s.peekT = 1.2 + Math.random() * 2; }           // on top he just turns
+    else if (s.out) { s.out = false; s.peekT = .5 + Math.random() * .8; }                       // ducks in
+    else { s.out = true; s.side = Math.random() < .5 ? -1 : 1; s.peekT = 1.2 + Math.random() * 1.8; } // pops out a side
+    placeHead(s, i);
+    if (s.out) { s.head.classList.remove("peek"); void s.head.offsetWidth; s.head.classList.add("peek"); }
+  });
+}
+
 function landShrimp() {
   const c = K.carrier, n = K.stack.length;
   const sx = n ? K.stack[n - 1].x : K.W / 2, dx = c.x - sx;
@@ -1175,15 +1290,17 @@ function landShrimp() {
   const perfect = Math.abs(dx) < K.S * .07;
   if (perfect) c.x = sx;
   let pinched = false;
-  if (K.crab && K.crab.on) {
+  if (K.crab && K.crab.phase === "top") {
     pinched = true;
     c.x += (Math.random() < .5 ? -1 : 1) * K.S * .3;
     crabLeaves(true);
     stackToast(`OW! Lab Crab pinched ${STACK_SHORT[c.who]}. The whole professor wobbles.`, true);
   }
-  $("tower").appendChild(c.el);
-  placeAt(c.el, c.x, topY(n));
-  K.stack.push({ x: c.x, el: c.el, who: c.who });
+  c.el.remove();
+  const s = { x: c.x, who: c.who };
+  K.stack.push(s);
+  addToCoat(s);
+  layoutCoat();
   K.carrier = null; K.state = "wait";
   const lean = stackLean();
   K.lean = lean.signed;
@@ -1191,27 +1308,52 @@ function landShrimp() {
   if (lean.worst > 1) return toppleStack();
   $("stackLine").textContent = lean.worst > .65 ? deal(STACK_WOBBLY) : perfect && !pinched ? deal(STACK_PERFECT) : deal(STACK_OK);
   if (K.stack.length >= STACK_GOAL) return winStack();
-  // Lab Crab climbs in at least once from the third shrimp up, at most twice a game.
+  // Lab Crab comes out at least once from the third shrimp up, at most twice a game.
   if (!K.crab && K.stack.length >= 2 && K.crabSeen < 2 && (Math.random() < .4 || (K.crabSeen === 0 && K.stack.length >= 3))) kLater(crabArrives, 250);
   kLater(newCarrier, 450);
 }
+
+// Lab Crab lives in the coat pocket. He peeks out, climbs the front of the coat, then sits on the top head.
+// He's only in the way once he's up there.
 function crabArrives() {
   if (K.over || !K.stack.length) return;
   const el = document.createElement("div");
   el.className = "stack-crab";
   el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="Lab Crab">`;
   $("tower").appendChild(el);
-  K.crab = { el, on: true, t: 0 };
+  K.crab = { el, phase: "pocket", t: 0, y: K.baseY - 12 * K.k - K.S * .45 * .55 };
   K.crabSeen++;
-  stackToast("Lab Crab is climbing into the professor! Wait for him to leave.", true);
+  stackToast("Lab Crab crawled out of the coat pocket. He's climbing up!", true);
+}
+function crabTick(dt) {
+  const cr = K.crab;
+  if (!cr || cr.phase === "gone") return;
+  cr.t += dt;
+  const C = K.S * .45, crown = headCrown() - C * .75;
+  let x;
+  if (cr.phase === "pocket") {
+    x = K.stack[0].x - K.coatW / 2 + 6 * K.k;  // in the pocket
+    if (cr.t > .7) { cr.phase = "climb"; cr.t = 0; }
+  } else if (cr.phase === "climb") {
+    cr.y = Math.max(crown, cr.y - 85 * dt);
+    const i = Math.max(0, Math.min(K.stack.length - 1, Math.floor((K.baseY - cr.y - C / 2) / K.step)));
+    x = K.stack[i].x - K.coatW * .12;
+    if (cr.y <= crown) { cr.phase = "top"; cr.t = 0; stackToast("Lab Crab is on the professor's head! Wait for him to leave.", true); }
+  } else {
+    cr.y = crown;
+    x = K.stack[K.stack.length - 1].x + Math.sin(cr.t * 3) * K.S * .25;
+    if (cr.t > 2.6) return crabLeaves(false);
+  }
+  placeAt(cr.el, x, cr.y);
 }
 function crabLeaves(pinched) {
   const cr = K.crab;
-  cr.on = false;
+  cr.phase = "gone";
   cr.el.classList.add("leave");
   if (!pinched) stackToast("Lab Crab got bored and climbed down.");
   kLater(() => { cr.el.remove(); if (K.crab === cr) K.crab = null; }, 900);
 }
+
 function stackTick(now) {
   if (K.over) return;
   const dt = Math.min(.05, (now - K.last) / 1000);
@@ -1239,12 +1381,8 @@ function stackTick(now) {
       if (K.over) return;
     } else placeAt(c.el, c.x, c.y);
   }
-  if (K.crab && K.crab.on) {
-    K.crab.t += dt;
-    const top = K.stack[K.stack.length - 1];
-    placeAt(K.crab.el, top.x + Math.sin(K.crab.t * 3) * K.S * .3, topY(K.stack.length - 1) - K.S * .3);
-    if (K.crab.t > 2.8) crabLeaves(false);
-  }
+  specsPeek(dt);
+  crabTick(dt);
   $("tower").style.transform = `rotate(${(K.lean * 4 + Math.sin(K.t * 2.6) * Math.abs(K.lean) * 2.5).toFixed(2)}deg)`;
   K.raf = requestAnimationFrame(stackTick);
 }
