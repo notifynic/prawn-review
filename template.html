@@ -1121,48 +1121,57 @@ const STACK_WOBBLY = ["\"Nobody move. Nobody breathe.\"", "\"Why is the professo
 let K = null;
 const kLater = (fn, ms) => K.timers.push(setTimeout(fn, ms));
 
-// One section of the long lab coat, in the same whites and greys as the coats in the prawn art. The tile is wider
-// than the coat body so the top section can have sleeves and the bottom one a flared hem.
-// Top section: collar with a V-neck showing shrimp inside, sleeves with a claw out of each cuff.
+// One section of the long lab coat, in the same whites and greys as the coats in the prawn art. Each section bulges
+// where its shrimp is and pinches in at the joins, with its own lumps (lump.l / lump.r: how far each side bulges,
+// lump.c: how high the bulge sits). The tile is wider than the coat body to leave room for the bulges.
+// Top section: rounded shoulders and a collar with a V-neck showing shrimp inside.
 // Bottom section: flared hem, back vent and the pocket Lab Crab lives in.
 const TILE_W = 30, TILE_OFF = 4;
 const coatTiles = new Map();
-function coatTile(h, collar, hem) {
-  const key = `${h}${collar}${hem}`;
+const lumpAt = (lump, size, t) => {
+  const u = (t - lump.c) / (t < lump.c ? lump.c : 1 - lump.c);
+  return Math.round(size * Math.max(0, 1 - u * u));
+};
+function coatTile(h, collar, hem, lump) {
+  const key = [h, collar, hem, lump.l, lump.r, lump.c].join();
   if (coatTiles.has(key)) return coatTiles.get(key);
   const c = document.createElement("canvas");
   c.width = TILE_W; c.height = h;
   const x = c.getContext("2d"), O = TILE_OFF, CW = COAT_W;
-  const px = (i, j, col, w = 1, hh = 1) => { x.fillStyle = col; x.fillRect(i, j, w, hh); };
-  const body = (j0, j1, grow = 0) => {
-    const l = O - grow, r = O + CW - 1 + grow;
-    px(l, j0, "#fafaf5", r - l + 1, j1 - j0);
-    px(r - 5, j0, "#c4cad4", 4, j1 - j0); px(r - 2, j0, "#acb2c0", 2, j1 - j0);   // shadow down the right side
-    px(l, j0, "#78829e", 1, j1 - j0); px(r, j0, "#78829e", 1, j1 - j0);           // outline
-  };
-  body(0, h);
+  const px = (i, j, col, w = 1, hh = 1) => { if (w > 0) { x.fillStyle = col; x.fillRect(i, j, w, hh); } };
+  const flare = j => !hem ? 0 : j >= h - 2 ? 2 : j >= h - 4 ? 1 : 0;
+  const shoulder = j => collar ? [3, 2, 1, 1][j] || 0 : 0;
+  const L = [], R = [];
+  for (let j = 0; j < h; j++) {
+    const t = (j + .5) / h;
+    L[j] = O - Math.max(lumpAt(lump, lump.l, t), flare(j)) + shoulder(j);
+    R[j] = O + CW - 1 + Math.max(lumpAt(lump, lump.r, t), flare(j)) - shoulder(j);
+    px(L[j], j, "#fafaf5", R[j] - L[j] + 1);
+    px(R[j] - 5, j, "#c4cad4", 3); px(R[j] - 2, j, "#acb2c0", 2);   // shadow down the right side
+  }
+  // Outline, joined up where the edge steps in or out by more than a pixel.
+  for (let j = 0; j < h; j++) {
+    px(L[j], j, "#78829e"); px(R[j], j, "#78829e");
+    if (j && L[j] < L[j - 1] - 1) px(L[j], j, "#78829e", L[j - 1] - L[j]);
+    if (j && L[j] > L[j - 1] + 1) px(L[j - 1], j - 1, "#78829e", L[j] - L[j - 1]);
+    if (j && R[j] > R[j - 1] + 1) px(R[j - 1] + 1, j, "#78829e", R[j] - R[j - 1]);
+    if (j && R[j] < R[j - 1] - 1) px(R[j] + 1, j - 1, "#78829e", R[j - 1] - R[j]);
+  }
+  if (!collar) { px(L[0] + 1, 0, "#c4cad4", 2); px(R[0] - 2, 0, "#acb2c0", 2); }    // little creases at the join
   if (hem) {
-    body(h - 4, h - 2, 1); body(h - 2, h, 2);
-    px(O - 2, h - 1, "#78829e", CW + 4, 1);
-    px(O + 11, h - 6, "#78829e", 1, 6);                                             // back vent
-    px(O + 3, h - 12, "#78829e", 6, 1);                                             // pocket
+    px(L[h - 1], h - 1, "#78829e", R[h - 1] - L[h - 1] + 1);
+    px(O + 11, h - 6, "#78829e", 1, 6);                                            // back vent
+    px(O + 3, h - 12, "#78829e", 6, 1);                                            // pocket
     px(O + 3, h - 11, "#c4cad4", 1, 5); px(O + 8, h - 11, "#c4cad4", 1, 5); px(O + 3, h - 6, "#c4cad4", 6, 1);
   }
-  px(O + 10, 0, "#c4cad4", 1, h - (hem ? 6 : 0));                                   // front edge
+  px(O + 10, collar ? 5 : 0, "#c4cad4", 1, h - (hem ? 6 : 0) - (collar ? 5 : 0));     // front edge
   for (let j = collar ? 9 : 4; j < h - (hem ? 6 : 0); j += 8) px(O + 11, j, "#78829e"); // buttons
   if (collar) {
-    x.clearRect(O, 0, 1, 1); x.clearRect(O + CW - 1, 0, 1, 1);
-    px(O + 1, 0, "#78829e", 5, 1); px(O + 16, 0, "#78829e", 5, 1); px(O, 1, "#78829e"); px(O + CW - 1, 1, "#78829e");
+    px(L[0], 0, "#78829e", O + 6 - L[0]); px(O + 16, 0, "#78829e", R[0] - O - 15);   // shoulders
     for (let j = 0; j < 5; j++) {
-      px(O + 6 + j, j, "#78829e"); px(O + 15 - j, j, "#78829e");                    // lapels
-      if (j < 4) px(O + 7 + j, j, "#be342e", 8 - 2 * j);                            // shrimp showing in the V
+      px(O + 6 + j, j, "#78829e"); px(O + 15 - j, j, "#78829e");                   // lapels
+      if (j < 4) px(O + 7 + j, j, "#be342e", 8 - 2 * j);                           // shrimp showing in the V
       px(O + 5 + j, j + 1, "#c4cad4");
-    }
-    for (const [sx, shade] of [[0, "#fafaf5"], [TILE_W - 4, "#c4cad4"]]) {
-      px(sx, 2, "#fafaf5", 4, h - 8); px(sx + (sx ? 2 : 0), 2, shade, 2, h - 8);
-      px(sx, 2, "#78829e", 1, h - 6); px(sx + 3, 2, "#78829e", 1, h - 6); px(sx, 1, "#78829e", 4, 1);
-      px(sx + 1, h - 6, "#c4cad4", 2, 2); px(sx, h - 4, "#78829e", 4, 1);           // cuff
-      px(sx + 1, h - 3, "#ee5c3c", 2, 1); px(sx + 1, h - 2, "#be342e"); px(sx + 2, h - 2, "#ee5c3c"); // claw
     }
   }
   const url = c.toDataURL();
@@ -1243,12 +1252,13 @@ function addToCoat(s) {
   s.coat.className = "coat";
   s.coat.style.width = TILE_W * K.k + "px"; s.coat.style.height = K.step + 1 + "px";
   s.side = H.faces; s.out = true; s.peekT = 1 + Math.random() * 2;
+  s.lump = { l: 1 + Math.floor(Math.random() * 3), r: 1 + Math.floor(Math.random() * 3), c: +(.35 + Math.random() * .3).toFixed(2) };
   $("tower").append(s.head, s.coat);
 }
 function layoutCoat() {
   const n = K.stack.length, k = K.k, tileH = Math.round(K.step / k);
   K.stack.forEach((s, i) => {
-    s.coat.style.backgroundImage = `url(${coatTile(tileH, i === n - 1, i === 0)})`;
+    s.coat.style.backgroundImage = `url(${coatTile(tileH, i === n - 1, i === 0, s.lump)})`;
     s.coat.style.left = s.x - TILE_W * K.k / 2 + "px";
     s.coat.style.top = coatTop(i) + "px";
     placeHead(s, i);
@@ -1261,7 +1271,8 @@ function placeHead(s, i) {
     s.head.style.left = s.x - w / 2 + s.side * w * .2 + "px";
     s.head.style.top = coatTop(i) - h + 3 * k + "px";
   } else {
-    s.head.style.left = (s.side > 0 ? s.x + K.coatW / 2 - 3 * k : s.x - K.coatW / 2 + 3 * k - w) + "px";
+    const bulge = lumpAt(s.lump, s.side > 0 ? s.lump.r : s.lump.l, .5) * k;
+    s.head.style.left = (s.side > 0 ? s.x + K.coatW / 2 + bulge - 3 * k : s.x - K.coatW / 2 - bulge + 3 * k - w) + "px";
     s.head.style.top = coatTop(i) + K.step / 2 - h / 2 + "px";
   }
   s.head.hidden = !top && !s.out;
