@@ -1107,6 +1107,9 @@ function endFizz() {
 // above any shrimp sits too far off its shoulders. Landed shrimp disappear into the coat with only their heads
 // poking out; the top one sticks out of the collar.
 const STACK_GOAL = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
+// How far off-centre a shrimp can sit on the one below, as a share of shrimp width. Further than this and a
+// dropped shrimp falls off; the tower topples when the weight above any shrimp averages out further than this.
+const STACK_REACH = .48;
 const STACK_SHORT = { scampi: "Scampi", specs: "Specsworth", fizz: "Fizz" };
 // Head crops from each 34x34 sprite (art pixels). faces: which way the head points, 1 = right, -1 = left.
 const STACK_HEADS = {
@@ -1234,7 +1237,7 @@ function stackLean() {
   let worst = 0, signed = 0;
   for (let k = -1; k < K.stack.length - 1; k++) {
     const above = K.stack.slice(k + 1), com = above.reduce((a, b) => a + b.x, 0) / above.length;
-    const r = (com - (k < 0 ? K.W / 2 : K.stack[k].x)) / (k < 0 ? K.W * .23 : K.S * .48);
+    const r = (com - (k < 0 ? K.W / 2 : K.stack[k].x)) / (k < 0 ? K.W * .23 : K.S * STACK_REACH);
     if (Math.abs(r) > worst) { worst = Math.abs(r); signed = r; }
   }
   return { worst, signed };
@@ -1292,7 +1295,7 @@ function specsPeek(dt) {
 function landShrimp() {
   const c = K.carrier, n = K.stack.length;
   const sx = n ? K.stack[n - 1].x : K.W / 2, dx = c.x - sx;
-  if (Math.abs(dx) > (n ? K.S * .55 : K.W * .23)) {
+  if (Math.abs(dx) > (n ? K.S * STACK_REACH : K.W * .23)) {
     c.miss = true; c.dir = Math.sign(dx) || 1;
     K.drops++; stackHud();
     $("stackLine").textContent = `"${STACK_SHORT[c.who]} fell off. Back of the queue."`;
