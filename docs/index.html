@@ -281,6 +281,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
   background: var(--memo); border-top: 4px solid #fff3b0; color: var(--ink);
   font-family: var(--display); font-size: 12px; letter-spacing: .14em;
 }
+.stack-world { position: absolute; inset: 0; will-change: transform; }
 .tower { position: absolute; inset: 0; pointer-events: none; }
 .tower.timber { transition: transform 1.1s cubic-bezier(.5, 0, 1, .6); }
 .stack-shrimp { position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); pointer-events: none; will-change: transform; }
@@ -406,7 +407,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
     <img class="pix" id="stackIntroImg" alt="" style="width:120px;height:120px">
     <h1>Shrimp Stacking!</h1>
     <p>The Golden Clipboard goes to the tallest professor in the ocean. The lab doesn't have a tall professor. It has three shrimp and one very long lab coat.</p>
-    <p>Tap to drop each scientist onto the one below. Stack six to reach award height. Miss and they fall off. Lean too far and the whole professor topples.</p>
+    <p>Tap to drop each scientist onto the one below. Stack nine to reach award height, then keep going: it gets faster with every shrimp. Miss and they fall off. Lean too far and the whole professor topples.</p>
     <div class="legend leave"><span>Watch out</span><div><img class="pix" id="stackIntroCrab" alt=""></div></div>
     <p class="small">Lab Crab lives in the coat pocket. When he climbs up onto the professor's head, wait for him to leave. Drop a shrimp on him and he pinches, and everything wobbles.</p>
     <button class="big" id="btnStack">START STACKING</button>
@@ -1106,7 +1107,11 @@ function endFizz() {
 // swings along the top; tap to drop it. It lands if it's over the one below, and the tower topples if the weight
 // above any shrimp sits too far off its shoulders. Landed shrimp disappear into the coat with only their heads
 // poking out; the top one sticks out of the collar.
-const STACK_GOAL = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
+// Nine shrimp wins the award, but the game carries on until the tower falls or three shrimp do, swinging faster
+// with every shrimp. The view scrolls up as the tower grows. STACK_MENTION or more without the award still earns a grant.
+const STACK_GOAL = 9, STACK_MENTION = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
+const STACK_ROOM = 40;      // shrimp the coat canvas has room for; the swing is far too fast long before this
+const stackSwing = n => 2 + n * .4;  // swing speed (radians a second) with n shrimp stacked
 // How far off-centre a shrimp can sit on the one below, as a share of shrimp width. Further than this and a
 // dropped shrimp falls off; the tower topples when the weight above any shrimp averages out further than this.
 const STACK_REACH = .48;
@@ -1168,21 +1173,24 @@ function beginStack() {
   const room = $("stackRoom"), W = room.clientWidth, H = room.clientHeight;
   // Whole-number scale where there's room (crisp pixels), shrinking smoothly only on very small screens.
   const fit = Math.min(76 / 34, W * .2 / 34, (H - 40) / 190), k = fit >= 2 ? Math.floor(fit) : fit;
-  const S = 34 * k, baseY = H - 34, y0 = Math.round(baseY / k) - COAT_HEM;
-  const aw = Math.ceil(W / k), ah = Math.ceil(H / k);
+  // The coat canvas reaches oy art rows above the room's top, so the tower can grow out of view and be scrolled to.
+  const S = 34 * k, baseY = H - 34, oy = COAT_STEP * STACK_ROOM, y0 = Math.round(baseY / k) - COAT_HEM + oy;
+  const aw = Math.ceil(W / k), ah = Math.ceil(H / k) + oy;
   room.style.setProperty("--s", S + "px");
-  room.innerHTML = `<div class="award" style="top:${(y0 - COAT_STEP * (STACK_GOAL - 1) - 39) * k}px">AWARD HEIGHT</div>` +
+  room.innerHTML = `<div class="stack-world" id="stackWorld">` +
+    `<div class="award" style="top:${(y0 - oy - COAT_STEP * (STACK_GOAL - 1) - 39) * k}px">AWARD HEIGHT</div>` +
     `<div class="podium">PODIUM</div><div class="tower" id="tower" style="transform-origin:${W / 2}px ${baseY}px">` +
-    `<canvas id="coatCanvas" class="coat-canvas" width="${aw}" height="${ah}" style="width:${aw * k}px;height:${ah * k}px"></canvas></div>`;
-  K = { W, H, S, baseY, k, y0, stack: [], front: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
-        lean: 0, t: 0, last: performance.now(), over: false, timers: [] };
+    `<canvas id="coatCanvas" class="coat-canvas" width="${aw}" height="${ah}" style="top:${-oy * k}px;width:${aw * k}px;height:${ah * k}px"></canvas></div></div>`;
+  K = { W, H, S, baseY, k, y0, oy, cam: 0, stack: [], front: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
+        lean: 0, t: 0, last: performance.now(), over: false, won: false, timers: [] };
   $("stackLine").textContent = "\"Stand up straight. The judges are watching.\"";
   stackHud();
   newCarrier();
   K.raf = requestAnimationFrame(stackTick);
 }
 function stackHud() {
-  $("stackHeight").textContent = `Height ${K.stack.length} of ${STACK_GOAL}`;
+  const n = K.stack.length;
+  $("stackHeight").textContent = n < STACK_GOAL ? `Height ${n} of ${STACK_GOAL}` : `Height ${n} · award won`;
   $("stackDrops").innerHTML = "Fell off " + [...Array(STACK_DROPS)].map((_, i) => `<i class="${i < K.drops ? "on" : ""}"></i>`).join("");
 }
 function stackToast(text, bad) {
@@ -1195,12 +1203,12 @@ function stackToast(text, bad) {
 // top piece's head will be.
 const joinY = i => K.y0 - COAT_STEP * i;
 const artX = i => K.stack[i].x / K.k;
-const topY = n => (joinY(n) - 41) * K.k;
+const topY = n => (joinY(n) - 41 - K.oy) * K.k;
 const placeAt = (el, x, y, rot) => el.style.transform = `translate(${x - el.offsetWidth / 2}px, ${y}px)` + (rot ? ` rotate(${rot}deg)` : "");
 // Where the top head's crown is (screen x and y), so Lab Crab can sit on it.
 const headCrown = () => {
   const n = K.stack.length, top = K.stack[n - 1], m = COAT[`coat-top-${COAT_WHO[top.who]}.png`], [cx, cy] = COAT_CROWN[top.who];
-  return [(Math.round(artX(n - 1) - m.bottom[0]) + cx) * K.k, (joinY(n - 1) - m.bottom[1] + cy) * K.k];
+  return [(Math.round(artX(n - 1) - m.bottom[0]) + cx) * K.k, (joinY(n - 1) - m.bottom[1] + cy - K.oy) * K.k];
 };
 
 function newCarrier() {
@@ -1208,8 +1216,8 @@ function newCarrier() {
   const who = STACK_ORDER[K.next++ % STACK_ORDER.length];
   const el = document.createElement("img");
   el.className = "pix stack-shrimp"; el.src = IMG[who]; el.alt = SCI[who].name;
-  $("stackRoom").appendChild(el);
-  K.carrier = { who, el, x: K.W / 2, y: 6, vy: 0, phase: Math.random() * 6, miss: false };
+  $("stackWorld").appendChild(el);
+  K.carrier = { who, el, x: K.W / 2, y: 6 - K.cam, vy: 0, phase: Math.random() * 6, miss: false };
   K.state = "aim";
 }
 function dropStack() {
@@ -1313,7 +1321,7 @@ function landShrimp() {
   stackHud();
   if (lean.worst > 1) return toppleStack();
   $("stackLine").textContent = lean.worst > .65 ? deal(STACK_WOBBLY) : perfect && !pinched ? deal(STACK_PERFECT) : deal(STACK_OK);
-  if (K.stack.length >= STACK_GOAL) return winStack();
+  if (K.stack.length === STACK_GOAL) awardReached();
   // Lab Crab comes out at least once from the third shrimp up, at most twice a game.
   if (!K.crab && K.stack.length >= 2 && K.crabSeen < 2 && (Math.random() < .4 || (K.crabSeen === 0 && K.stack.length >= 3))) kLater(crabArrives, 250);
   kLater(newCarrier, 450);
@@ -1327,7 +1335,7 @@ function crabArrives() {
   el.className = "stack-crab";
   el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="Lab Crab">`;
   $("tower").appendChild(el);
-  K.crab = { el, phase: "pocket", t: 0, y: (joinY(0) + COAT_POCKET[1]) * K.k - K.S * .45 * .55 };
+  K.crab = { el, phase: "pocket", t: 0, y: (joinY(0) + COAT_POCKET[1] - K.oy) * K.k - K.S * .45 * .55 };
   K.crabSeen++;
   stackToast("Lab Crab crawled out of the coat pocket. He's climbing up!", true);
 }
@@ -1342,7 +1350,7 @@ function crabTick(dt) {
     if (cr.t > .7) { cr.phase = "climb"; cr.t = 0; }
   } else if (cr.phase === "climb") {
     cr.y = Math.max(crown, cr.y - 85 * dt);
-    x = (K.front[Math.round((cr.y + C / 2) / K.k)] ?? artX(0)) * K.k;   // up the front opening
+    x = (K.front[Math.round((cr.y + C / 2) / K.k) + K.oy] ?? artX(0)) * K.k;   // up the front opening
     if (cr.y <= crown) { cr.phase = "top"; cr.t = 0; stackToast("Lab Crab is on the professor's head! Wait for him to leave.", true); }
   } else {
     cr.y = crown;
@@ -1365,9 +1373,14 @@ function stackTick(now) {
   K.last = now;
   K.t += dt;
   const c = K.carrier;
+  // Scroll up so there's always room to drop above the tower.
+  const camGoal = Math.max(0, K.S + 40 - topY(K.stack.length));
+  K.cam += (camGoal - K.cam) * Math.min(1, dt * 4);
+  $("stackWorld").style.transform = `translateY(${K.cam.toFixed(1)}px)`;
   if (c && K.state === "aim") {
-    c.phase += (2 + K.stack.length * .3) * dt;
+    c.phase += stackSwing(K.stack.length) * dt;
     c.x = K.W / 2 + Math.sin(c.phase) * ((K.W - K.S) / 2 - 4);
+    c.y = 6 - K.cam;
     placeAt(c.el, c.x, c.y);
   } else if (c && K.state === "fall") {
     c.vy += 2600 * dt;
@@ -1375,7 +1388,7 @@ function stackTick(now) {
     if (c.miss) {
       c.x += c.dir * 140 * dt;
       placeAt(c.el, c.x, c.y, c.dir * (c.y - topY(K.stack.length)) * .8);
-      if (c.y > K.H + 20) {
+      if (c.y + K.cam > K.H + 20) {
         c.el.remove(); K.carrier = null; K.state = "wait";
         if (K.drops >= STACK_DROPS) { K.over = true; return kLater(() => endStack("drops"), 500); }
         kLater(newCarrier, 300);
@@ -1399,10 +1412,10 @@ function toppleStack() {
   $("stackLine").textContent = "\"TIMBER!\"";
   kLater(() => endStack("topple"), 1300);
 }
-function winStack() {
-  K.over = true;
-  $("stackLine").textContent = "\"Ahem. Professor Tallshrimp, here for the award.\"";
-  kLater(() => endStack("win"), 1100);
+function awardReached() {
+  K.won = true;
+  $("stackLine").textContent = "\"Award height! Don't stop. They're still measuring.\"";
+  stackToast("Golden Clipboard won! Keep stacking: it only gets faster from here.");
 }
 function endStack(how) {
   K.over = true;
@@ -1411,16 +1424,18 @@ function endStack(how) {
   $("stack").hidden = true;
   const h = K.stack.length;
   let head, text, reward;
-  if (how === "win") {
+  if (h >= STACK_GOAL) {
     head = "Award accepted!";
-    text = "Six shrimp, one lab coat. The judges counted two of everyone and said nothing. The Golden Clipboard is ours.";
+    text = `${h} shrimp tall, one lab coat. The judges counted three of everyone and said nothing. ` +
+      (how === "topple" ? "Then the professor fell over, but the Golden Clipboard was already in the post."
+                        : "Then scientists started dropping off, but the Golden Clipboard was already in the post.");
     reward = fullMarks();
   } else {
     head = how === "topple" ? "TIMBER!" : "Too many falls";
     text = how === "topple"
       ? "The professor fell over in front of the judges. They gave the award to a sponge."
       : "Three scientists fell off the tower. The judges assumed it was interpretive dance.";
-    if (h >= 4) { S.score++; reward = "Honourable mention: +1 grant"; } else reward = "No award this time";
+    if (h >= STACK_MENTION) { S.score++; reward = "Honourable mention: +1 grant"; } else reward = "No award this time";
   }
   showResult(IMG.scampi, head, text, reward, "");
 }
