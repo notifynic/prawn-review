@@ -11,6 +11,7 @@ Private artifact copy: https://claude.ai/artifact/93p5k3QT1VDJf1xgZ6qxZ7
 - `index.html` is built from it and is the file that gets published. Don't edit it by hand.
 - `docs/index.html` is the same page as a full standalone file, served by GitHub Pages.
 - `build.sh` builds both. It swaps `__GLASSES__`, `__BEAKER__` and `__CLIPBOARD__` for the prawn art in `../pixel-editor/art/lab shrimp final/`.
+  It also bakes in Shrimp Stacking's lab coat pieces from `art/coat-variants/` (`__COAT_<name>__` for each PNG, `__COAT_META__` for `coat-pieces.json`). That folder's README explains how the coat is put together.
 
 ```sh
 sh build.sh
