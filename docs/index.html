@@ -289,6 +289,16 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 .coat-canvas { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated; image-rendering: crisp-edges; }
 .stack-crab img { width: 100%; height: 100%; display: block; animation: crabstep .3s steps(2) infinite; }
 .stack-crab.leave { animation: crabdrop .9s ease-in forwards; }
+/* "GRANT FUNDED" banner: a gold ribbon across the top that scrolls the grant's name past. */
+.grant-banner {
+  position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 30;
+  overflow: hidden; pointer-events: none; padding: 8px 0;
+  background: var(--memo); color: var(--ink); border-block: 3px dashed var(--ink);
+  font-family: var(--display); font-size: 18px; letter-spacing: .04em; white-space: nowrap;
+}
+.grant-banner span { display: inline-block; padding-left: 16px; animation: grantscroll 5s linear forwards; }
+.grant-banner b { color: var(--reject); }
+@keyframes grantscroll { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 .room-toast {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3;
   background: var(--ink); color: var(--fg); font-size: 14px; padding: 6px 10px;
@@ -1119,6 +1129,15 @@ const STACK_SHORT = { scampi: "Scampi", specs: "Specsworth", fizz: "Fizz" };
 const STACK_PERFECT = ["\"Perfect posture!\"", "\"Textbook shoulders.\"", "\"The judges are nodding.\"", "\"Tall. Very tall. Extremely professor.\""];
 const STACK_OK = ["\"Bit wonky. Own it.\"", "\"Lean less.\"", "\"Act tall.\"", "\"Somebody's elbow is in my ear.\""];
 const STACK_WOBBLY = ["\"Nobody move. Nobody breathe.\"", "\"Why is the professor leaning?\"", "\"I can see the floor getting closer.\""];
+// Grants won in Shrimp Stacking get one of these names, announced in a "GRANT FUNDED" banner.
+const STACK_GRANTS = [
+  "The Leaning Tower of Prawn Initiative", "Vertical Crustacean Studies Fund", "One Very Tall Professor Fellowship",
+  "Standing on the Shoulders of Shrimp", "Applied Wobble Research Council", "Centre for Advanced Teetering",
+  "The Stack Overflow Endowment", "Institute of Precarious Balance", "Long Coat Studies Bursary",
+  "TIMBER! Prevention Trust", "Fund for Not Falling Over (Mostly)", "Tall Professor Impersonation Grant",
+  "Upward Prawn Mobility Scheme", "Department of Structural Shrimpineering", "Society for Prawns Standing on Prawns",
+  "Centre of Gravity Relocation Project", "Lab Crab Is Not Part of This Tower Fund", "Three Shrimp in a Trench Coat Award",
+];
 let K = null;
 const kLater = (fn, ms) => K.timers.push(setTimeout(fn, ms));
 
@@ -1422,22 +1441,43 @@ function endStack(how) {
   cancelAnimationFrame(K.raf);
   K.timers.forEach(clearTimeout);
   $("stack").hidden = true;
-  const h = K.stack.length;
+  const h = K.stack.length, grants = [];
   let head, text, reward;
   if (h >= STACK_GOAL) {
     head = "Award accepted!";
     text = `${h} shrimp tall, one lab coat. The judges counted three of everyone and said nothing. ` +
       (how === "topple" ? "Then the professor fell over, but the Golden Clipboard was already in the post."
                         : "Then scientists started dropping off, but the Golden Clipboard was already in the post.");
+    const before = S.score;
     reward = fullMarks();
+    for (let i = before; i < S.score; i++) grants.push(deal(STACK_GRANTS));
   } else {
     head = how === "topple" ? "TIMBER!" : "Too many falls";
     text = how === "topple"
       ? "The professor fell over in front of the judges. They gave the award to a sponge."
       : "Three scientists fell off the tower. The judges assumed it was interpretive dance.";
-    if (h >= STACK_MENTION) { S.score++; reward = "Honourable mention: +1 grant"; } else reward = "No award this time";
+    if (h >= STACK_MENTION) { S.score++; grants.push(deal(STACK_GRANTS)); reward = "Honourable mention: +1 grant"; }
+    else reward = "No award this time";
   }
   showResult(IMG.scampi, head, text, reward, "");
+  grants.forEach(grantFunded);
+}
+
+// Banners take turns: each grant's name scrolls across once, then the next one starts.
+const grantQueue = [];
+function grantFunded(name) {
+  grantQueue.push(name);
+  if (grantQueue.length === 1) showNextGrant();
+}
+function showNextGrant() {
+  if (!grantQueue.length) return;
+  const b = document.createElement("div");
+  b.className = "grant-banner";
+  b.setAttribute("role", "status");
+  b.innerHTML = "<span><b>★ GRANT FUNDED ★</b> </span>";
+  b.firstChild.append(grantQueue[0]);
+  document.body.appendChild(b);
+  setTimeout(() => { b.remove(); grantQueue.shift(); showNextGrant(); }, 5000);
 }
 
 function gameOver(why) {
