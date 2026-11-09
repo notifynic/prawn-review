@@ -177,7 +177,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 .inspector.looking img { transform: scaleX(-1) scale(1.12); }
 @keyframes wobble { 50% { transform: rotate(8deg); } }
 .inspector .says { font-size: 14px; line-height: 1.35; min-width: 0; }
-.inspector .says b { font-family: var(--display); display: block; font-size: 17px; letter-spacing: .04em; }
+.inspector .says b { font-family: var(--display); display: block; font-size: 20px; letter-spacing: .04em; }
 .inspector.away .says b { color: var(--fund); }
 .inspector.turning .says b { color: var(--memo); }
 .inspector.looking .says b { color: var(--reject); }
@@ -193,7 +193,19 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
   background: radial-gradient(ellipse at 85% -10%, rgba(255, 217, 90, .55), rgba(255, 217, 90, .12) 60%, transparent 75%);
   opacity: 0; transition: opacity .2s;
 }
-.room.lit::after { opacity: 1; }
+.room.looking::after { opacity: 1; }
+/* Lab Inspection: the room's border and a big eye say whether the inspector is watching. */
+.room.away { border-color: var(--fund); }
+.room.turning { border-color: var(--memo); animation: warn .3s steps(2) infinite; }
+.room.looking { border-color: var(--reject); box-shadow: inset 0 0 0 3px var(--reject), inset 0 0 50px rgba(232, 80, 58, .4); }
+@keyframes warn { 50% { border-color: transparent; } }
+.watch-eye {
+  position: absolute; top: 8px; left: 50%; z-index: 3; width: 72px; height: 48px; transform: translateX(-50%);
+  pointer-events: none; opacity: 0;
+}
+.room.turning .watch-eye { opacity: 1; animation: blink .3s steps(2) infinite; }
+.room.looking .watch-eye { opacity: 1; }
+@keyframes blink { 50% { opacity: .2; } }
 .evidence {
   position: absolute; width: 22%; aspect-ratio: 1; max-width: 84px;
   padding: 0; border: 0; background: none;
@@ -280,6 +292,18 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 @keyframes crabhop { 40% { translate: 0 -14px; } }
 .crab-list { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .crab-list .from { font-family: var(--display); font-size: 12px; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; }
+/* Skip: a small button in the top corner of every minigame screen. */
+.skip {
+  position: fixed; top: max(10px, env(safe-area-inset-top, 0px)); right: 12px; z-index: 5;
+  background: var(--bg); border: 2px dashed var(--dim); color: var(--dim);
+  font-family: var(--display); font-size: 13px; letter-spacing: .06em; padding: 4px 10px;
+}
+.screen.inspect .inspector { padding-right: 72px; }
+/* Fizz intro: the three special things side by side, each with its label underneath. */
+.legend-trio { display: flex; justify-content: center; gap: 22px; }
+.legend-trio figure { margin: 0; display: grid; justify-items: center; gap: 4px; font-family: var(--display); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fund); }
+.legend-trio figure.leave { color: var(--reject); }
+.legend-trio img { width: 32px; height: 32px; image-rendering: pixelated; }
 .testbtn {
   background: none; border: 2px dashed var(--dim); color: var(--dim);
   font-family: var(--display); font-size: 13px; letter-spacing: .06em; padding: 6px 12px;
@@ -381,8 +405,9 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 </div>
 
 <div class="screen" id="inspectIntro" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="panel">
-    <img class="pix" id="introGrouper" alt="" style="width:144px;height:108px">
+    <img class="pix" id="introGrouper" alt="" style="width:112px;height:84px">
     <h1>Lab Inspection!</h1>
     <p>Inspector Grouper from the Department of Fisheries has arrived, holding a clipboard that has never once been used for good. The lab is full of things the committee banned. Some of them are still warm.</p>
     <p>Back turned? Tap the contraband to stuff it somewhere. Inspector looking? Freeze. Touching anything while watched is "tampering with evidence", and there is a form for that.</p>
@@ -395,6 +420,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 </div>
 
 <div class="screen inspect" id="inspect" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="inspect-wrap">
     <div class="inspector away" id="inspector">
       <img class="pix" id="grouper" alt="Inspector Grouper">
@@ -406,20 +432,24 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 </div>
 
 <div class="screen" id="fizzIntro" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="panel">
-    <img class="pix" id="fizzIntroImg" alt="" style="width:120px;height:120px">
+    <img class="pix" id="fizzIntroImg" alt="" style="width:88px;height:88px">
     <h1>Fizz Containment!</h1>
     <p>Prof. Fizz Bisque has started a reaction. Again. Bubbles are pouring out of the flask.</p>
     <p>Pop them before they reach the ceiling. Big bubbles need two taps. If five get out, the lab goes boom. Nobody loses a flask. Fizz is used to it.</p>
-    <div class="legend"><span>Bonus</span><div><img class="pix" id="fizzIntroCrab" alt=""></div></div>
-    <div class="legend"><span>Splits</span><div><img class="pix" id="fizzIntroSplit" alt=""></div></div>
-    <div class="legend leave"><span>Don't pop</span><div><img class="pix" id="fizzIntroSample" alt=""></div></div>
-    <p class="small">Lab Crab is riding one of the bubbles: pop it to rescue him for a bonus grant. Orange bubbles split in two. Green ones are Fizz's prized sample: pop one and the room fills with fog.</p>
+    <div class="legend-trio">
+      <figure><img class="pix" id="fizzIntroCrab" alt=""><figcaption>Bonus</figcaption></figure>
+      <figure><img class="pix" id="fizzIntroSplit" alt=""><figcaption>Splits</figcaption></figure>
+      <figure class="leave"><img class="pix" id="fizzIntroSample" alt=""><figcaption>Don't pop</figcaption></figure>
+    </div>
+    <p class="small">Pop Lab Crab's bubble to rescue him for a bonus grant. Orange bubbles split in two. Green ones are Fizz's prized sample: pop one and the room fills with fog.</p>
     <button class="big" id="btnFizz">START POPPING</button>
   </div>
 </div>
 
 <div class="screen inspect" id="fizz" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="inspect-wrap">
     <div class="inspector away">
       <img class="pix" id="fizzImg" alt="Prof. Fizz Bisque" style="width:72px;height:72px">
@@ -431,6 +461,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 </div>
 
 <div class="screen" id="stackIntro" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="panel">
     <img class="pix" id="stackIntroImg" alt="" style="width:120px;height:120px">
     <h1>Shrimp Stacking!</h1>
@@ -443,6 +474,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
 </div>
 
 <div class="screen inspect" id="stack" hidden>
+  <button class="skip" data-skip aria-label="Skip this minigame">✕ SKIP</button>
   <div class="inspect-wrap">
     <div class="inspector away">
       <img class="pix" id="stackImg" alt="Dr. Scampi Longform" style="width:72px;height:72px">
@@ -792,6 +824,10 @@ const DECOYS = [
     "..rwwwwr....", "..rrrrrr....", "..rrrrrr....", "..rrrrrr....", "..rrrrrr....", "...rrrr....."]) },
   { decoy: "intern", name: "A sleeping intern" },
 ];
+// The big eye over the room while the inspector is turning round or looking.
+const WATCH_EYE = sprite([
+  "....kkkk....", "..kkwwwwkk..", ".kwwwbbwwwk.", "kwwwbkkbwwwk", "kwwwbkkbwwwk", ".kwwwbbwwwk.", "..kkwwwwkk..", "....kkkk....",
+]);
 const AWAY_LINES = ["Reading the fire exit sign very slowly.", "Checking the fridge temperature.", "Counting the ceiling tiles. There is no ceiling.", "Writing something down. Underlining it twice.", "Tapping the barometer and frowning at it.", "Sniffing a beaker. Regretting it."];
 const CLEAR_LINES = ["\"Hm. Spotless.\"", "\"Carry on.\"", "\"Suspiciously tidy.\"", "\"Nothing to see here, apparently.\""];
 // Lab Crab wanders the room on his own. Hiding him is optional: the inspector won't write him up, but he does comment.
@@ -818,7 +854,7 @@ function runInspection() {
 function beginInspection() {
   $("inspectIntro").hidden = true;
   $("inspect").hidden = false;
-  $("room").innerHTML = "";
+  $("room").innerHTML = `<img class="pix watch-eye" src="${WATCH_EYE}" alt="">`;
   $("grouper").src = GROUPER;
   I = { sweep: 0, writeups: 0, phase: "away", items: [], timers: [] };
   nextSweep();
@@ -831,9 +867,9 @@ function inspectFoot() {
 function setPhase(phase, line) {
   I.phase = phase;
   $("inspector").className = "inspector " + phase;
-  $("inspState").textContent = { away: "Back turned", turning: "Turning around!", looking: "LOOKING" }[phase];
+  $("inspState").textContent = { away: "Back turned: hide stuff!", turning: "Turning around!", looking: "LOOKING! Freeze!" }[phase];
   $("inspLine").textContent = line;
-  $("room").classList.toggle("lit", phase === "looking");
+  for (const p of ["away", "turning", "looking"]) $("room").classList.toggle(p, p === phase);
 }
 // Each sweep: evidence keeps appearing while the inspector's back is turned, a short warning, then a look.
 function nextSweep() {
@@ -983,6 +1019,14 @@ function showResult(img, head, text, reward, why) {
   $("doneReward").textContent = reward;
   $("inspectDone").hidden = false;
   $("btnBackToWork").focus();
+}
+// Skip: stop whichever minigame is on screen, with no reward, and carry on as if it had ended.
+function quitMinigame() {
+  if (I) I.timers.forEach(clearTimeout);
+  if (F) { F.over = true; cancelAnimationFrame(F.raf); clearTimeout(F.endT); }
+  if (K) { K.over = true; cancelAnimationFrame(K.raf); K.timers.forEach(clearTimeout); }
+  ["inspectIntro", "inspect", "fizzIntro", "fizz", "stackIntro", "stack"].forEach(id => $(id).hidden = true);
+  backToWork();
 }
 function backToWork() {
   $("inspectDone").hidden = true;
@@ -1189,7 +1233,7 @@ function boomFizz() {
   F.over = true;
   $("fizzRoom").classList.add("boom");
   $("fizzLine").textContent = "\"...oops.\"";
-  setTimeout(endFizz, 900);
+  F.endT = setTimeout(endFizz, 900);
 }
 function endFizz() {
   F.over = true;
@@ -1223,6 +1267,7 @@ function endFizz() {
 // Nine shrimp wins the award, but the game carries on until the tower falls or three shrimp do, swinging faster
 // with every shrimp. The view scrolls up as the tower grows. STACK_MENTION or more without the award still earns a grant.
 const STACK_GOAL = 9, STACK_MENTION = 6, STACK_DROPS = 3, STACK_ORDER = ["scampi", "specs", "fizz"];
+const STACK_BONUS_EVERY = 6;  // one more grant for every this many shrimp past the award
 const STACK_ROOM = 40;      // shrimp the coat canvas has room for; the swing is far too fast long before this
 const stackSwing = n => 2 + n * .4;  // swing speed (radians a second) with n shrimp stacked
 // How far off-centre a shrimp can sit on the one below, as a share of shrimp width. Further than this and a
@@ -1303,7 +1348,7 @@ function beginStack() {
     `<div class="award" style="top:${(y0 - oy - COAT_STEP * (STACK_GOAL - 1) - 39) * k}px">AWARD HEIGHT</div>` +
     `<div class="podium">PODIUM</div><div class="tower" id="tower" style="transform-origin:${W / 2}px ${baseY}px">` +
     `<canvas id="coatCanvas" class="coat-canvas" width="${aw}" height="${ah}" style="top:${-oy * k}px;width:${aw * k}px;height:${ah * k}px"></canvas></div></div>`;
-  K = { W, H, S, baseY, k, y0, oy, cam: 0, stack: [], front: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabSeen: 0,
+  K = { W, H, S, baseY, k, y0, oy, cam: 0, stack: [], front: [], drops: 0, next: 0, state: "aim", carrier: null, crab: null, crabNext: Math.random() < .4 ? 2 : 3,
         lean: 0, t: 0, last: performance.now(), over: false, won: false, timers: [] };
   $("stackLine").textContent = "\"Stand up straight. The judges are watching.\"";
   stackHud();
@@ -1444,8 +1489,11 @@ function landShrimp() {
   if (lean.worst > 1) return toppleStack();
   $("stackLine").textContent = lean.worst > .65 ? deal(STACK_WOBBLY) : perfect && !pinched ? deal(STACK_PERFECT) : deal(STACK_OK);
   if (K.stack.length === STACK_GOAL) awardReached();
-  // Lab Crab comes out at least once from the third shrimp up, at most twice a game.
-  if (!K.crab && K.stack.length >= 2 && K.crabSeen < 2 && (Math.random() < .4 || (K.crabSeen === 0 && K.stack.length >= 3))) kLater(crabArrives, 250);
+  // Lab Crab first comes out at the second or third shrimp, then comes back every 3 to 5 shrimp for the rest of the game.
+  if (!K.crab && K.stack.length >= K.crabNext) {
+    K.crabNext = K.stack.length + 3 + Math.floor(Math.random() * 3);
+    kLater(crabArrives, 250);
+  }
   kLater(newCarrier, 450);
 }
 
@@ -1458,7 +1506,6 @@ function crabArrives() {
   el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="Lab Crab">`;
   $("tower").appendChild(el);
   K.crab = { el, phase: "pocket", t: 0, y: (joinY(0) + COAT_POCKET[1] - K.oy) * K.k - K.S * .45 * .55 };
-  K.crabSeen++;
   stackToast("Lab Crab crawled out of the coat pocket. He's climbing up!", true);
 }
 function crabTick(dt) {
@@ -1552,6 +1599,8 @@ function endStack(how) {
       (how === "topple" ? "Then the professor fell over, but the Golden Clipboard was already in the post."
                         : "Then scientists started dropping off, but the Golden Clipboard was already in the post.");
     reward = fullMarks();
+    const extra = Math.floor((h - STACK_GOAL) / STACK_BONUS_EVERY);
+    if (extra) { S.score += extra; reward += `. Extra height: +${extra} grant${extra > 1 ? "s" : ""}`; }
   } else {
     head = how === "topple" ? "TIMBER!" : "Too many falls";
     text = how === "topple"
@@ -1637,6 +1686,7 @@ $("btnInspect").onclick = beginInspection;
 $("btnBackToWork").onclick = backToWork;
 $("btnFizz").onclick = beginFizz;
 $("btnStack").onclick = beginStack;
+document.querySelectorAll("[data-skip]").forEach(b => b.onclick = quitMinigame);
 $("stackRoom").addEventListener("pointerdown", e => { e.preventDefault(); dropStack(); });
 // Minigames take turns, one every 15 points.
 const MINIGAMES = [runInspection, runFizz, runStack];
