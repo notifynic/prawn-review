@@ -200,6 +200,7 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
   transform: translate(-50%, -50%); animation: popin .2s ease-out;
 }
 .evidence img { width: 100%; height: 100%; display: block; }
+.evidence.crab { transition: left .35s ease-in-out, top .35s ease-in-out; }
 .evidence.spotted { outline: 3px solid var(--reject); outline-offset: 2px; animation: none; }
 .evidence.gone { animation: poof .25s ease-in forwards; pointer-events: none; }
 @keyframes popin { from { transform: translate(-50%, -50%) scale(0); } }
@@ -223,6 +224,20 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
   animation: foam 1.7s ease-in forwards;
 }
 @keyframes foam { 0% { opacity: 0; transform: scale(.6); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+/* Fizz Containment: green fog from a popped sample bubble (same timing as the foam). */
+.foam.fog {
+  background:
+    radial-gradient(circle at 25% 35%, #c8f5b0 0 20%, transparent 21%),
+    radial-gradient(circle at 70% 30%, #a9e892 0 24%, transparent 25%),
+    radial-gradient(circle at 50% 75%, #c8f5b0 0 26%, transparent 27%),
+    rgba(118, 214, 92, .7);
+}
+/* Cracks spread across the new ceiling with each escaped bubble. */
+.ceiling-crack {
+  position: absolute; top: 3px; z-index: 1; width: 48px; height: 40px; transform: translateX(-50%);
+  pointer-events: none; animation: crackin .3s steps(4);
+}
+@keyframes crackin { from { clip-path: inset(0 0 100% 0); } }
 .legend { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
 .legend span { width: 7.5em; text-align: right; color: var(--fund); flex: none; }
 .legend.leave span { color: var(--reject); }
@@ -371,9 +386,10 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
     <h1>Lab Inspection!</h1>
     <p>Inspector Grouper from the Department of Fisheries has arrived, holding a clipboard that has never once been used for good. The lab is full of things the committee banned. Some of them are still warm.</p>
     <p>Back turned? Tap the contraband to stuff it somewhere. Inspector looking? Freeze. Touching anything while watched is "tampering with evidence", and there is a form for that.</p>
-    <p class="small">Don't touch the decoys. The microscope is very sensitive, the extinguisher is very full, and the intern is very asleep.</p>
+    <p class="small">Don't touch the decoys. The microscope is very sensitive, the extinguisher is very full, and the intern is very asleep. Lab Crab wanders about on his own: hide him if you can catch him. The inspector won't write him up, but he will have opinions.</p>
     <div class="legend"><span>Hide it</span><div id="legendHide"></div></div>
     <div class="legend leave"><span>Do NOT touch</span><div id="legendLeave"></div></div>
+    <div class="legend"><span>Optional</span><div id="legendCrab"></div></div>
     <button class="big" id="btnInspect">START HIDING</button>
   </div>
 </div>
@@ -396,7 +412,9 @@ button:focus-visible { outline: 3px solid var(--memo); outline-offset: 2px; }
     <p>Prof. Fizz Bisque has started a reaction. Again. Bubbles are pouring out of the flask.</p>
     <p>Pop them before they reach the ceiling. Big bubbles need two taps. If five get out, the lab goes boom. Nobody loses a flask. Fizz is used to it.</p>
     <div class="legend"><span>Bonus</span><div><img class="pix" id="fizzIntroCrab" alt=""></div></div>
-    <p class="small">Lab Crab is riding one of the bubbles. Pop it to rescue him for a bonus grant.</p>
+    <div class="legend"><span>Splits</span><div><img class="pix" id="fizzIntroSplit" alt=""></div></div>
+    <div class="legend leave"><span>Don't pop</span><div><img class="pix" id="fizzIntroSample" alt=""></div></div>
+    <p class="small">Lab Crab is riding one of the bubbles: pop it to rescue him for a bonus grant. Orange bubbles split in two. Green ones are Fizz's prized sample: pop one and the room fills with fog.</p>
     <button class="big" id="btnFizz">START POPPING</button>
   </div>
 </div>
@@ -743,7 +761,7 @@ const GROUPER = sprite([
   "......d...d.....",
 ]);
 const EVIDENCE = [
-  { name: "Lab Crab", hide: "Lab Crab is now a lamp.", spotted: "\"Is that crab wearing a lab coat? Is that... Lab Crab?\"", img: sprite([
+  { name: "Lab Crab", crab: true, img: sprite([
     ".r........r.", "rr.r....r.rr", ".rr......rr.", "..rrrrrrrr..", ".rrkrrrrkrr.", ".rrrrrrrrrr.",
     ".wwwwrrwwww.", ".wwwwwewwww.", ".wewwwewwew.", "..wwwwewww..", ".r.r....r.r.", "r..r....r..r"]) },
   { name: "A moon telescope", hide: "The telescope is now a coat rack.", spotted: "\"Why is there a telescope pointed at the moon?\"", img: sprite([
@@ -776,14 +794,24 @@ const DECOYS = [
 ];
 const AWAY_LINES = ["Reading the fire exit sign very slowly.", "Checking the fridge temperature.", "Counting the ceiling tiles. There is no ceiling.", "Writing something down. Underlining it twice.", "Tapping the barometer and frowning at it.", "Sniffing a beaker. Regretting it."];
 const CLEAR_LINES = ["\"Hm. Spotless.\"", "\"Carry on.\"", "\"Suspiciously tidy.\"", "\"Nothing to see here, apparently.\""];
+// Lab Crab wanders the room on his own. Hiding him is optional: the inspector won't write him up, but he does comment.
+const CRAB_HIDE_LINES = ["Lab Crab is now a lamp.", "Lab Crab is hiding in a beaker. Poorly.", "Lab Crab is pretending to be a paperweight.",
+  "Lab Crab has been filed under C.", "Lab Crab is under a hat. The hat is moving."];
+const CRAB_SPOTTED_LINES = ["\"Is that crab wearing a lab coat? ...I'll allow it.\"", "\"That crab has better posture than your staff.\"",
+  "\"Is the crab on the payroll? He looks busy.\"", "\"I'm not writing up the crab. Nobody writes up the crab.\"",
+  "\"Lab Crab. We meet again.\"", "\"The crab saluted me. Noted, favourably.\""];
+const INSPECT_GRANTS = ["Bureau of Hiding Things Under Other Things", "Act Natural Fellowship", "Plausible Deniability Endowment",
+  "Nothing to See Here Foundation", "Institute of Suspicious Tidiness", "Krill Puff Concealment Grant",
+  "Centre for Looking Innocent", "It Was Like That When We Got Here Trust"];
 const SWEEPS = 3;
 let I = null;
 
 function runInspection() {
   $("introGrouper").src = GROUPER;
   const icon = src => `<img class="pix" src="${src}" alt="">`;
-  $("legendHide").innerHTML = EVIDENCE.map(ev => icon(ev.img)).join("");
+  $("legendHide").innerHTML = EVIDENCE.filter(ev => !ev.crab).map(ev => icon(ev.img)).join("");
   $("legendLeave").innerHTML = DECOYS.map(ev => icon(ev.img || IMG.specs)).join("");
+  $("legendCrab").innerHTML = icon(LAB_CRAB);
   $("inspectIntro").hidden = false;
   $("btnInspect").focus();
 }
@@ -833,34 +861,51 @@ function foamRoom() {
   later(() => f.remove(), 1700);
 }
 function look() {
-  const out = I.items.filter(it => !it.gone && !it.ev.decoy);
+  const out = I.items.filter(it => !it.gone && !it.ev.decoy && !it.ev.crab);
+  const crabOut = I.items.some(it => !it.gone && it.ev.crab);
   out.forEach(it => it.el.classList.add("spotted"));
   I.writeups += out.length;
-  setPhase("looking", out.length ? out[0].ev.spotted : deal(CLEAR_LINES));
+  setPhase("looking", crabOut ? deal(CRAB_SPOTTED_LINES) : out.length ? out[0].ev.spotted : deal(CLEAR_LINES));
   inspectFoot();
   // The shrimp can't help themselves: new evidence turns up mid-look. Tapping it now gets you caught.
   if (I.sweep < SWEEPS) { later(spawnEvidence, 350); later(spawnEvidence, 850); }
   later(() => { out.forEach(removeItem); nextSweep(); }, 1400);
 }
-function spawnEvidence(force) {
-  if (I.phase === "turning" && !force) return;
-  const live = I.items.filter(it => !it.gone);
-  const used = new Set(live.map(it => it.slot));
-  const free = [...Array(12).keys()].filter(s => !used.has(s));
-  if (!free.length) return;
-  // Up to two decoys at a time, and never from the intern knocking things over.
-  const decoysOut = live.filter(it => it.ev.decoy).length;
-  const slot = pick(free), ev = !force && decoysOut < 2 && Math.random() < .3 ? pick(DECOYS) : pick(EVIDENCE);
-  const el = document.createElement("button");
-  el.className = "evidence" + (ev.decoy ? ` decoy ${ev.decoy}` : "");
-  el.setAttribute("aria-label", ev.name);
+// The room is a 3x4 grid of slots, each item nudged a little off its slot so it doesn't look tidy.
+const freeSlots = () => {
+  const used = new Set(I.items.filter(it => !it.gone).map(it => it.slot));
+  return [...Array(12).keys()].filter(s => !used.has(s));
+};
+function placeInSlot(el, slot) {
   el.style.left = `${18 + (slot % 3) * 32 + Math.random() * 8 - 4}%`;
   el.style.top = `${14 + Math.floor(slot / 3) * 24 + Math.random() * 6 - 3}%`;
+}
+function spawnEvidence(force) {
+  if (I.phase === "turning" && !force) return;
+  const free = freeSlots();
+  if (!free.length) return;
+  // Up to two decoys at a time, and never from the intern knocking things over. One Lab Crab at a time.
+  const live = I.items.filter(it => !it.gone);
+  const decoysOut = live.filter(it => it.ev.decoy).length;
+  const evidence = live.some(it => it.ev.crab) ? EVIDENCE.filter(ev => !ev.crab) : EVIDENCE;
+  const slot = pick(free), ev = !force && decoysOut < 2 && Math.random() < .3 ? pick(DECOYS) : pick(evidence);
+  const el = document.createElement("button");
+  el.className = "evidence" + (ev.decoy ? ` decoy ${ev.decoy}` : "") + (ev.crab ? " crab" : "");
+  el.setAttribute("aria-label", ev.name);
+  placeInSlot(el, slot);
   el.innerHTML = `<img class="pix" src="${ev.img || pick(Object.values(IMG))}" alt="">`;
   const it = { el, ev, slot, gone: false };
   el.addEventListener("pointerdown", e => { e.preventDefault(); tapEvidence(it); });
   I.items.push(it);
   $("room").appendChild(el);
+  if (ev.crab) later(() => crabWander(it), 1000);
+}
+// Lab Crab scuttles to another free spot every second or so, even while the inspector is looking.
+function crabWander(it) {
+  if (it.gone) return;
+  const free = freeSlots();
+  if (free.length) { it.slot = pick(free); placeInSlot(it.el, it.slot); }
+  later(() => crabWander(it), 1000 + Math.random() * 600);
 }
 function tapEvidence(it) {
   if (it.gone || it.el.classList.contains("spotted")) return;
@@ -871,6 +916,7 @@ function tapEvidence(it) {
     return roomToast("Caught red-clawed! Confiscated.", true);
   }
   removeItem(it);
+  if (it.ev.crab) return roomToast(deal(CRAB_HIDE_LINES));
   if (!it.ev.decoy) return roomToast(it.ev.hide);
   if (it.ev.decoy === "microscope") {
     roomToast("You hid the approved microscope. Now the lab looks suspicious!", true);
@@ -897,23 +943,28 @@ function roomToast(text, bad) {
 function endInspection() {
   I.timers.forEach(clearTimeout);
   $("inspect").hidden = true;
-  const w = I.writeups;
+  const w = I.writeups, before = S.score;
   let head, text, reward;
   if (w === 0) {
     head = "Spotless!";
     text = "Inspector Grouper found nothing. Suspicious, but nothing.";
     reward = fullMarks();
-  } else if (w <= 2) {
+  } else if (w === 1) {
+    head = "Nearly spotless";
+    text = `Inspector Grouper wrote you up once, then confiscated a krill puff "for evidence".`;
+    S.score++;
+    reward = "+1 grant";
+  } else if (w === 2) {
     head = "A stern warning";
-    text = `Inspector Grouper wrote you up ${w === 1 ? "once" : "twice"}, then confiscated a krill puff "for evidence".`;
+    text = "Inspector Grouper wrote you up twice and sighed in a way that felt personal.";
     reward = "No harm done";
   } else {
     head = "Written up!";
-    text = `Inspector Grouper wrote you up ${w} times and confiscated one of your safety flasks.`;
-    S.lives--;
-    reward = "-1 safety flask";
+    text = `Inspector Grouper wrote you up ${w} times and stapled the report to the lab door.`;
+    reward = "No grant this time";
   }
-  showResult(GROUPER, head, text, reward, `Inspector Grouper wrote the lab up ${w} times.`);
+  announceGrants(INSPECT_GRANTS, before);
+  showResult(GROUPER, head, text, reward, "");
 }
 
 // ---- Shared minigame ending ----
@@ -965,6 +1016,8 @@ function pixelBubble(n, fill, rim, dark, opts = {}) {
     for (let j = 2; j < n * .7; j++) { px(i, j, "#1e141c"); if (j % 2) i += j % 4 === 1 ? -1 : 1; }
     px(i + 1, Math.floor(n * .7), "#1e141c"); px(i + 2, Math.floor(n * .7) + 1, "#1e141c");
   }
+  if (opts.seam) for (let j = 3; j < n - 3; j++) px(Math.round(mid), j, dark);                 // where it splits
+  if (opts.spots) [[.32, .62], [.62, .36], [.66, .68], [.46, .5]].forEach(([u, v]) => px(Math.round(n * u), Math.round(n * v), dark));
   return c.toDataURL();
 }
 function pixelPop(n, col) {
@@ -984,8 +1037,35 @@ const BUBBLE_IMG = {
   big: pixelBubble(18, "rgba(110,200,255,.45)", "#cfe8f0", "#4a6a9a"),
   cracked: pixelBubble(18, "rgba(110,200,255,.6)", "#ffffff", "#4a6a9a", { crack: true }),
   crab: pixelBubble(20, "rgba(255,255,255,.18)", "#ffffff", "#9aa6ad", { ring: true }),
+  sample: pixelBubble(16, "rgba(118,214,92,.55)", "#c8f5b0", "#3e8a2a", { spots: true }),
+  splitter: pixelBubble(16, "rgba(255,150,100,.55)", "#ffd0b0", "#c0603a", { seam: true }),
   popSmall: pixelPop(14, "#e2b8ff"),
   popBig: pixelPop(18, "#cfe8f0"),
+};
+// A crack sprite for the ceiling: two jagged lines running down from one point, different every time.
+function crackSprite() {
+  const c = document.createElement("canvas");
+  c.width = 12; c.height = 10;
+  const x = c.getContext("2d");
+  x.fillStyle = "#e8503a";
+  for (const dir of [-1, 1]) {
+    let i = 6;
+    for (let j = 0; j < 10; j++) { x.fillRect(i, j, 1, 1); if (Math.random() < .5) i += dir; }
+  }
+  return c.toDataURL();
+}
+const BUBBLE_SIZE = { small: 56, big: 78, crab: 84, sample: 64, splitter: 64 };
+// Which bubbles come out: plain ones for the first few seconds, then some special ones mixed in.
+const FIZZ_MIX_EARLY = { small: 80, big: 20 }, FIZZ_MIX = { small: 56, big: 20, sample: 12, splitter: 12 };
+const FIZZ_SAMPLE_LINES = ["You popped Fizz's prized sample. The room is now green.", "That was Fizz's sample! Everything smells of limes and regret.",
+  "Sample popped. Fizz is writing your name on a list.", "Green fog! Fizz says it's probably not toxic. Probably."];
+const FIZZ_GRANTS = ["Controlled Explosions (Controlled Is a Strong Word) Fund", "Ceiling Preservation Society", "Institute of Applied Popping",
+  "The It's Totally Fine Foundation", "Purple Smell Research Council", "Fizz Bisque Damage Control Bursary",
+  "Centre for Keeping Things Indoors", "Bubble Wrap Studies Endowment"];
+const FIZZ_CRAB_GRANT = "Lab Crab Search and Rescue Fund";
+const pickWeighted = weights => {
+  let r = Math.random() * Object.values(weights).reduce((a, b) => a + b, 0);
+  for (const k in weights) if ((r -= weights[k]) < 0) return k;
 };
 const FIZZ_LINES = ["\"It's fine! It's totally fine!\"", "\"That one was a practice bubble.\"", "\"Okay. Slightly less fine.\"", "\"Nobody panic. I'm panicking.\"", "\"ONE MORE AND WE LOSE THE CEILING.\""];
 let F = null;
@@ -993,6 +1073,8 @@ let F = null;
 function runFizz() {
   $("fizzIntroImg").src = IMG.fizz;
   $("fizzIntroCrab").src = LAB_CRAB;
+  $("fizzIntroSplit").src = BUBBLE_IMG.splitter;
+  $("fizzIntroSample").src = BUBBLE_IMG.sample;
   $("fizzIntro").hidden = false;
   $("btnFizz").focus();
 }
@@ -1017,15 +1099,16 @@ function fizzToast(text, bad) {
   t.className = "room-toast" + (bad ? " bad" : "");
   t.textContent = text;
 }
-// Bubbles rise from the flask and sway. Later bubbles come faster and quicker.
-function spawnBubble(kind) {
+// Bubbles rise from the floor and sway. Later bubbles come faster and quicker. A split bubble's halves start
+// where it was (from).
+function spawnBubble(kind, from) {
   const room = $("fizzRoom"), W = room.clientWidth, H = room.clientHeight;
-  const size = kind === "crab" ? 84 : kind === "big" ? 78 : 56;
+  const size = BUBBLE_SIZE[kind];
   const progress = F.t / FIZZ_SECONDS;
   const b = {
     kind, size, hp: kind === "big" ? 2 : 1,
-    baseX: W / 2 + (Math.random() - .5) * (W - size - 24), x: 0,
-    y: H - 70, sway: 10 + Math.random() * 14, phase: Math.random() * 6,
+    baseX: from ? from.x : W / 2 + (Math.random() - .5) * (W - size - 24), x: 0,
+    y: from ? from.y : H - 70, sway: 10 + Math.random() * 14, phase: Math.random() * 6,
     vy: H / ((kind === "crab" ? 4.2 : 3.4) - progress * 1.4),
   };
   b.baseX = Math.max(size / 2 + 6, Math.min(W - size / 2 - 6, b.baseX));
@@ -1033,7 +1116,7 @@ function spawnBubble(kind) {
   b.el.className = "bubble" + (kind === "big" ? " big" : "") + (kind === "crab" ? " crab" : "");
   b.el.style.width = b.el.style.height = size + "px";
   b.el.style.backgroundImage = `url(${BUBBLE_IMG[kind]})`;
-  b.el.setAttribute("aria-label", kind === "crab" ? "Lab Crab in a bubble" : "Bubble");
+  b.el.setAttribute("aria-label", { crab: "Lab Crab in a bubble", sample: "Fizz's sample: don't pop", splitter: "Splitting bubble" }[kind] || "Bubble");
   if (kind === "crab") b.el.innerHTML = `<img class="pix" src="${LAB_CRAB}" alt="">`;
   b.el.addEventListener("pointerdown", e => { e.preventDefault(); popBubble(b); });
   room.appendChild(b.el);
@@ -1052,8 +1135,25 @@ function popBubble(b) {
   } else {
     b.el.style.backgroundImage = `url(${b.kind === "big" ? BUBBLE_IMG.popBig : BUBBLE_IMG.popSmall})`;
     b.el.classList.add("pop");
+    if (b.kind === "sample") fogFizz();
+    if (b.kind === "splitter") [-1, 1].forEach(d => spawnBubble("small", { x: b.x + d * b.size * .4, y: b.y }));
   }
   setTimeout(() => b.el.remove(), b.kind === "crab" ? 900 : 200);
+}
+// Popping Fizz's sample fills the room with green fog, which blocks taps until it clears.
+function fogFizz() {
+  const f = document.createElement("div");
+  f.className = "foam fog";
+  $("fizzRoom").appendChild(f);
+  setTimeout(() => f.remove(), 1700);
+  fizzToast(deal(FIZZ_SAMPLE_LINES), true);
+}
+function crackCeiling(x) {
+  const c = document.createElement("img");
+  c.className = "pix ceiling-crack";
+  c.src = crackSprite(); c.alt = "";
+  c.style.left = `${x}px`;
+  $("fizzRoom").appendChild(c);
 }
 function fizzTick(now) {
   if (F.over) return;
@@ -1063,7 +1163,7 @@ function fizzTick(now) {
   if (F.t >= FIZZ_SECONDS) return endFizz();
   if (!F.crab && F.t >= F.crabAt) spawnBubble("crab");
   if (F.t >= F.nextSpawn) {
-    spawnBubble(Math.random() < .2 ? "big" : "small");
+    spawnBubble(pickWeighted(F.t < 3 ? FIZZ_MIX_EARLY : FIZZ_MIX));
     F.nextSpawn = F.t + .75 - (F.t / FIZZ_SECONDS) * .4;
   }
   for (const b of F.bubbles) {
@@ -1074,7 +1174,9 @@ function fizzTick(now) {
     if (b.y + b.size / 2 < 0) {
       b.gone = true; b.el.remove();
       if (b.kind === "crab") { fizzToast("Lab Crab floated away. He'll be back. He always comes back."); continue; }
+      if (b.kind === "sample") { fizzToast("Fizz's sample floated off safely. Fizz blows it a kiss."); continue; }
       F.escaped++;
+      crackCeiling(b.x);
       fizzHud();
       if (F.escaped >= FIZZ_MAX_ESCAPES) return boomFizz();
       fizzToast("A bubble got out! The ceiling creaks.", true);
@@ -1093,7 +1195,7 @@ function endFizz() {
   F.over = true;
   cancelAnimationFrame(F.raf);
   $("fizz").hidden = true;
-  const e = F.escaped;
+  const e = F.escaped, before = S.score;
   let head, text, reward;
   if (e >= FIZZ_MAX_ESCAPES) {
     head = "BOOM.";
@@ -1108,7 +1210,8 @@ function endFizz() {
     text = `${e} bubble${e === 1 ? "" : "s"} got out. The lab smells purple now. Nobody can explain it.`;
     reward = "No harm done";
   }
-  if (F.crabSaved) { S.score++; reward += ". Lab Crab bonus: +1 grant"; }
+  announceGrants(FIZZ_GRANTS, before);
+  if (F.crabSaved) { S.score++; reward += ". Lab Crab bonus: +1 grant"; grantFunded(FIZZ_CRAB_GRANT); }
   showResult(IMG.fizz, head, text, reward, "Prof. Fizz's reaction blew the ceiling off.");
 }
 
@@ -1129,7 +1232,7 @@ const STACK_SHORT = { scampi: "Scampi", specs: "Specsworth", fizz: "Fizz" };
 const STACK_PERFECT = ["\"Perfect posture!\"", "\"Textbook shoulders.\"", "\"The judges are nodding.\"", "\"Tall. Very tall. Extremely professor.\""];
 const STACK_OK = ["\"Bit wonky. Own it.\"", "\"Lean less.\"", "\"Act tall.\"", "\"Somebody's elbow is in my ear.\""];
 const STACK_WOBBLY = ["\"Nobody move. Nobody breathe.\"", "\"Why is the professor leaning?\"", "\"I can see the floor getting closer.\""];
-// Grants won in Shrimp Stacking get one of these names, announced in a "GRANT FUNDED" banner.
+// Grants won in Shrimp Stacking get one of these names (see announceGrants).
 const STACK_GRANTS = [
   "The Leaning Tower of Prawn Initiative", "Vertical Crustacean Studies Fund", "One Very Tall Professor Fellowship",
   "Standing on the Shoulders of Shrimp", "Applied Wobble Research Council", "Centre for Advanced Teetering",
@@ -1441,29 +1544,31 @@ function endStack(how) {
   cancelAnimationFrame(K.raf);
   K.timers.forEach(clearTimeout);
   $("stack").hidden = true;
-  const h = K.stack.length, grants = [];
+  const h = K.stack.length, before = S.score;
   let head, text, reward;
   if (h >= STACK_GOAL) {
     head = "Award accepted!";
     text = `${h} shrimp tall, one lab coat. The judges counted three of everyone and said nothing. ` +
       (how === "topple" ? "Then the professor fell over, but the Golden Clipboard was already in the post."
                         : "Then scientists started dropping off, but the Golden Clipboard was already in the post.");
-    const before = S.score;
     reward = fullMarks();
-    for (let i = before; i < S.score; i++) grants.push(deal(STACK_GRANTS));
   } else {
     head = how === "topple" ? "TIMBER!" : "Too many falls";
     text = how === "topple"
       ? "The professor fell over in front of the judges. They gave the award to a sponge."
       : "Three scientists fell off the tower. The judges assumed it was interpretive dance.";
-    if (h >= STACK_MENTION) { S.score++; grants.push(deal(STACK_GRANTS)); reward = "Honourable mention: +1 grant"; }
+    if (h >= STACK_MENTION) { S.score++; reward = "Honourable mention: +1 grant"; }
     else reward = "No award this time";
   }
+  announceGrants(STACK_GRANTS, before);
   showResult(IMG.scampi, head, text, reward, "");
-  grants.forEach(grantFunded);
 }
 
-// Banners take turns: each grant's name scrolls across once, then the next one starts.
+// Every grant a minigame gives (the score going up from before) gets a name from that minigame's list and a
+// "GRANT FUNDED" banner. Banners take turns: each name scrolls across once, then the next one starts.
+function announceGrants(names, before) {
+  for (let i = before; i < S.score; i++) grantFunded(deal(names));
+}
 const grantQueue = [];
 function grantFunded(name) {
   grantQueue.push(name);
